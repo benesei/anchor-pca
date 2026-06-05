@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the accompanying paper."
+title: "Anchor PCA"
+type: software
+version: "0.1.0"
+date-released: "2026-05-23"
+license: MIT
+url: "https://arxiv.org/abs/2606.06233"
+authors:
+  - family-names: Seiter
+    given-names: Benedikt
+  - family-names: Fries
+    given-names: Anya
+  - family-names: von Kügelgen
+    given-names: Julius
+  - family-names: Peters
+    given-names: Jonas
+preferred-citation:
+  type: article
+  title: "Anchor PCA"
+  authors:
+    - family-names: Seiter
+      given-names: Benedikt
+    - family-names: Fries
+      given-names: Anya
+    - family-names: von Kügelgen
+      given-names: Julius
+    - family-names: Peters
+      given-names: Jonas
+  year: 2026
+  url: "https://arxiv.org/abs/2606.06233"
+  identifiers:
+    - type: other
+      value: "arXiv:2606.06233"
+      description: "arXiv"

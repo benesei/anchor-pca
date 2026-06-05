@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+.DS_Store
+.ipynb_checkpoints/
+*.log
+
+# Local exploratory drafts and machine-specific scratch files.
+Temporary/
+
+# Generated experiment outputs.
+figures/
+results/
+data/
+**/figures/
+**/results/
+**/data/

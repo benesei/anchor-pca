@@ -1,0 +1,17 @@
+# Tested reproduction environment.
+#
+# The package itself should be installed in editable mode first:
+#   python -m pip install -e ".[examples,dev]"
+#
+# The perturbation-path and gas-sensor wcPCA baselines use the external minPCA
+# package pinned below. The PyTorch CPU wheel index is included for lightweight
+# CPU-only installs.
+
+--extra-index-url https://download.pytorch.org/whl/cpu
+numpy==1.26.4
+scipy==1.16.0
+pandas==2.3.1
+matplotlib==3.10.0
+pytest==9.0.3
+torch==2.2.2
+minPCA @ git+https://github.com/anyafries/minPCA.git@9b90ebd0b56fc8eb88a7217e38c49b35a6927f82
