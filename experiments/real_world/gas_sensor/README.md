@@ -1,63 +1,54 @@
-# Gas Sensor Drift Pipeline
+# Gas-sensor drift
 
-This folder contains the gas-sensor drift experiment from the paper. Temporal
-batches of the UCI Gas Sensor Array Drift Dataset are treated as domains
-(environments in the Python API); methods are fit on source batches `B1--Bs` and
-evaluated on source and held-out target batches `B(s+1)--B10`.
+We fit on temporal batches B1–Bs and evaluate on later batches B(s+1)–B10,
+for `s=3,...,8` and `k=10,20,30`. Feature scales are learned from source
+observations only; each batch covariance is centered within that batch. Source
+batches have equal fitting weight unless the weighting comparison specifies
+sample-size weights. Target EV is the equally weighted mean of batch EV fractions.
 
-Generated `data/`, `results/`, and `figures/` directories are ignored by git.
-Install dependencies from the repository root as described in `../../../README.md`.
-The `norm-maxRegret` baseline additionally requires the external `minPCA`
-package listed there.
+The UCI archive is downloaded automatically and its checksum is verified.
+See [data and licenses](../../../ASSETS.md).
 
-## Data
-
-The compute script downloads the UCI archive if it is not present locally and
-verifies SHA256
-`98fe3a30981a222dd4518fbcc3dddd45d5c0ce9b03ef6dc6fe5cf7a04cfbff5e` by
-default. Dataset page: https://doi.org/10.24432/C5MK6M; license: CC BY 4.0. The
-data contain sensor measurements, not human-subject records.
-
-## Full Pipeline
-
-Runtime category: expensive because of the external `norm-maxRegret` baseline.
+## Figures 4 and 8–10
 
 ```bash
 python experiments/real_world/gas_sensor/compute_rolling_split_explained_variance.py
+python experiments/real_world/gas_sensor/select_penalty.py
 python experiments/real_world/gas_sensor/plot_source_target_EV.py
 python experiments/real_world/gas_sensor/plot_rolling_split_summary.py
 python experiments/real_world/gas_sensor/plot_sstar_poolpca_target_batches.py
 ```
 
-Publication defaults:
+The compute script fits poolPCA and infinite-penalty Anchor PCA for all 18
+settings. It fits norm-maxRegret only for Figure 4 (`s=6`, `k=20`), using minPCA
+with 10 restarts, 2,000 iterations, learning rate 0.01, and seed
+`12020 + 10000*s + 101*k`. It also produces the gas-composition figure.
 
-- methods: `poolPCA`, `AnchorPCA_lambda=1`, `AnchorPCA_lambda=10`,
-  `AnchorPCA_infty`, and `norm-maxRegret`;
-- dimensions: `k = 5, 10, 20, 30, 40`;
-- rolling splits: last source batch `s = 3, 4, 5, 6, 7, 8, 9`;
-- preprocessing: source-batch standardization only;
-- `norm-maxRegret`: `n_restarts=10`, `n_iters=2000`, `lr=0.01`.
+`select_penalty.py` selects `2*E*lambda` over
+`{0, 0.001, 0.01, 0.1, 1, 10, 100, 1000, infinity}` by leave-one-source-batch-out
+EV. Preprocessing is refitted within each fold, fractions are averaged equally,
+and exact ties follow grid order. The selected method is shown as
+`AnchorPCA` with a hat-lambda subscript. Figure 10 compares the estimated first
+agreement block against poolPCA with the same number of directions.
 
-Outputs used in the paper:
-
-- `figures/gas_sensor_class_composition_by_batch.(png|pdf)`
-- `figures/gas_sensor_publication_b1_b6_source_target_k20.(png|pdf)`
-- `figures/rolling_publication_target_ev_combined.(png|pdf)`
-- `figures/sstar_poolpca_same_dim_b9_b10_ev.(png|pdf)`
-- `results/rolling_publication_explained_variance_all.csv`
-- `results/rolling_publication_anchor_infty_sstar_all.csv`
-- `results/rolling_publication_metadata.json`
-
-Target batches are used only for explained-variance evaluation and plotting.
-The source/target plot defaults to `s=6`, `k=20`; the rolling summary shows
-`k = 10, 20, 30` and `s = 3, ..., 8`; the B9/B10 diagnostic compares the first
-empirical agreement block of `AnchorPCA_infty` with same-dimensional `poolPCA`.
-
-## Smoke Run
+## Tables 3–6
 
 ```bash
-python experiments/real_world/gas_sensor/compute_rolling_split_explained_variance.py \
-  --k-values 10 --last-source-batches 3 --minpca-restarts 1 --minpca-iters 25
-python experiments/real_world/gas_sensor/plot_source_target_EV.py \
-  --k 10 --last-source-batch 3
+python experiments/real_world/gas_sensor/diagnose_b9_shift.py
+python experiments/real_world/gas_sensor/evaluate_weighting.py
+python experiments/real_world/gas_sensor/run_classification.py
 ```
+
+The B9 diagnostic fits on B1–B8 at `k=20,30`. The weighting comparison averages
+EV over targets within each split, then over the six splits `s=3,...,8`.
+
+Classification fits on B1–B6 and evaluates on B7–B10. It compares the seven
+rank-20 or unreduced pipelines in the paper. Preprocessing, representations,
+and classifier parameters are fitted within each source-validation fold.
+Selection uses equally weighted held-out balanced accuracy; target labels are
+used only for final evaluation. The seed is 20260724. All selected final fits
+must converge.
+
+Computation scripts accept `--output-dir` and `--data-dir`; plotting scripts
+accept `--experiment-dir`, `--results-dir`, and `--figures-dir`. The complete
+[reproduction runner](../../README.md) sets these paths automatically.

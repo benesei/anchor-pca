@@ -1,0 +1,5 @@
+profile,regime,method_id,n_population_designs,mean_target_population_ev_percent_total,mean_leading_m_projector_error_op
+balanced,easy,Anchor_PCA_infinity,50,57.74678931323119,0.07764150933051582
+balanced,easy,poolPCA,50,57.80644995780144,0.22589136416205666
+threshold_stress,hard,Anchor_PCA_infinity,50,49.3268404010208,0.13285743101159425
+threshold_stress,hard,poolPCA,50,49.436321821169365,0.9993957791330265

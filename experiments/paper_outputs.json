@@ -1,0 +1,117 @@
+{
+  "result_groups": {
+    "motivating": "motivating/results",
+    "perturbation": "perturbation/results",
+    "design_bank": "design_bank",
+    "recovery": "recovery",
+    "stress": "stress",
+    "unseen": "unseen",
+    "gas_sensor": "gas_sensor/results",
+    "fama_french": "fama_french/results"
+  },
+  "figures": [
+    {
+      "number": 1,
+      "label": "fig:motivating_example_4d_geometry",
+      "path": "figures/4d_motivation_exp_quotient_view.pdf"
+    },
+    {
+      "number": 2,
+      "label": "fig:motivating_example_4d_perturbation_path",
+      "path": "figures/perturbation_path.pdf"
+    },
+    {
+      "number": 3,
+      "label": "fig:infty_sstar_recovery_main",
+      "path": "figures/AnchorPCAinfty_consistency/infty_sstar_recovery_gaussian_g5_p10_k5_m2_main.pdf"
+    },
+    {
+      "number": 4,
+      "label": "fig:gas_sensor_b1_b6_k20",
+      "path": "figures/gas_sensor/gas_sensor_publication_b1_b6_source_target_k20.pdf"
+    },
+    {
+      "number": 5,
+      "label": "fig:infty_sstar_recovery_main_mixture",
+      "path": "figures/AnchorPCAinfty_consistency/infty_sstar_recovery_gaussian_mixture_g5_p10_k5_m2_main.pdf"
+    },
+    {
+      "number": 6,
+      "label": "fig:infty_sstar_recovery_g5_p8_k5_m1",
+      "path": "figures/AnchorPCAinfty_consistency/infty_sstar_recovery_gaussian_g5_p8_k5_m1.pdf"
+    },
+    {
+      "number": 7,
+      "label": "fig:infty_sstar_recovery_g2_p8_k5_m2",
+      "path": "figures/AnchorPCAinfty_consistency/infty_sstar_recovery_g2_p8_k5_m2_combined_extended_n100000.pdf"
+    },
+    {
+      "number": 8,
+      "label": "fig:gas_sensor_class_composition",
+      "path": "figures/gas_sensor/gas_sensor_class_composition_by_batch.pdf"
+    },
+    {
+      "number": 9,
+      "label": "fig:gas_sensor_rolling_summary",
+      "path": "figures/gas_sensor/rolling_publication_target_ev_combined.pdf"
+    },
+    {
+      "number": 10,
+      "label": "fig:gas_sensor_sstar_same_dim",
+      "path": "figures/gas_sensor/sstar_poolpca_same_dim_b9_b10_ev.pdf"
+    },
+    {
+      "number": 11,
+      "label": "fig:fama_source_scree",
+      "path": "figures/fama_french/fama_french_49_source_scree.pdf"
+    }
+  ],
+  "tables": [
+    {
+      "number": 1,
+      "label": "tab:motivating_example_4d",
+      "path": "tables/table1.csv"
+    },
+    {
+      "number": 2,
+      "label": "tab:unseen_target_ev",
+      "path": "tables/table2.csv"
+    },
+    {
+      "number": 3,
+      "label": "tab:gas_b9_diagnostic",
+      "path": "tables/table3.csv"
+    },
+    {
+      "number": 4,
+      "label": "tab:gas_weighting",
+      "path": "tables/table4.csv"
+    },
+    {
+      "number": 5,
+      "label": "tab:gas_classification_summary",
+      "path": "tables/table5.csv"
+    },
+    {
+      "number": 6,
+      "label": "tab:gas_classification_batches",
+      "path": "tables/table6.csv"
+    },
+    {
+      "number": 7,
+      "label": "tab:fama_period_ev",
+      "path": "tables/table7.csv"
+    },
+    {
+      "number": 8,
+      "label": "tab:fama_rank_sensitivity",
+      "path": "tables/table8.csv"
+    }
+  ],
+  "summaries": [
+    {
+      "label": "agreement gaps",
+      "path": "tables/agreement_gaps.csv"
+    }
+  ]
+}

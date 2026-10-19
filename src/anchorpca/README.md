@@ -205,6 +205,28 @@ The returned `SStarDimensionTestResult` contains:
 
 ## Utilities
 
+### Fixed-`k` penalty selection
+
+```python
+result = select_two_e_lambda_from_covariances(
+    covariances,
+    n_components=k,
+    n_obs=n_obs,
+)
+```
+
+The function performs leave-one-source-environment-out validation over
+`DEFAULT_TWO_E_LAMBDA_GRID`. Each candidate is scored by the fraction of total
+variance explained in the held-out source, ties follow grid order, and the
+winner is refitted on all sources. Finite candidates are interpreted as the
+coefficient `rho = 2 * E * lambda_` in `M_lambda`; `0` is poolPCA and `inf` uses
+`AnchorPCAInfty`. At least three source environments and exactly one infinity
+candidate are required. Select `k` separately from domain knowledge, a
+representation budget, or standard PCA diagnostics.
+
+`TwoELambdaSelectionResult` stores the candidates, fold-score matrix, means,
+standard errors, selected index and coefficient, and refitted estimator.
+
 - `empirical_covariance(X, center=True)`: returns covariance, mean, and sample
   size for one environment.
 - `empirical_covariances_from_envs(X_envs, center=True)`: returns covariances,

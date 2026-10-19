@@ -31,17 +31,7 @@ from scipy.linalg import null_space
 from anchorpca.reproducibility import repo_relative_path, software_versions
 
 
-CORE_GRID = (
-    (3, 8, 3),
-    (5, 8, 5),
-    (5, 10, 5),
-    (5, 10, 4),
-)
-
-EXTRA_GPKM_CONFIGS = (
-    # Small-E robustness case: E < k, with minimal feasible m.
-    (2, 8, 5, 2),
-)
+PAPER_CONFIGS = ((5, 10, 5, 2), (5, 8, 5, 1), (2, 8, 5, 2))
 
 DEFAULT_SEED = 42
 DEFAULT_N_DESIGNS_PER_CONFIG = 100
@@ -536,10 +526,10 @@ def write_metadata(
         "min_span_singular_value": float(min_span_singular_value),
         "max_attempts": int(max_attempts),
         "local_eigengap_min": float(LOCAL_EIGENGAP_MIN),
-        "core_grid": [{"g": g, "p": p, "k": k} for g, p, k in CORE_GRID],
+        "core_grid": [{"g": g, "p": p, "k": k} for g, p, k in dict.fromkeys((g, p, k) for g, p, k, m in PAPER_CONFIGS)],
         "extra_gpkm_configs": [
             {"g": g, "p": p, "k": k, "m": m}
-            for g, p, k, m in EXTRA_GPKM_CONFIGS
+            for g, p, k, m in PAPER_CONFIGS
         ],
         "profiles": {
             name: {
@@ -585,42 +575,11 @@ def main() -> None:
     output_dir = args.output_dir.resolve()
     prepare_output_dir(output_dir, overwrite=bool(args.overwrite))
 
-    configs = []
-    for g, p, k in CORE_GRID:
-        for m in feasible_m_values(g, p, k):
-            for profile_name in PROFILES:
-                config_id = config_id_for(g, p, k, m, profile_name)
-                configs.append(
-                    {
-                        "config_id": config_id,
-                        "g": g,
-                        "p": p,
-                        "k": k,
-                        "m": m,
-                        "q": p - k,
-                        "profile": profile_name,
-                    }
-                )
-    existing_config_ids = {str(config["config_id"]) for config in configs}
-    for g, p, k, m in EXTRA_GPKM_CONFIGS:
-        if m not in feasible_m_values(g, p, k):
-            raise ValueError(f"Extra config m={m} is infeasible for g={g}, p={p}, k={k}.")
-        for profile_name in PROFILES:
-            config_id = config_id_for(g, p, k, m, profile_name)
-            if config_id in existing_config_ids:
-                continue
-            configs.append(
-                {
-                    "config_id": config_id,
-                    "g": g,
-                    "p": p,
-                    "k": k,
-                    "m": m,
-                    "q": p - k,
-                    "profile": profile_name,
-                }
-            )
-            existing_config_ids.add(config_id)
+    configs = [
+        {"config_id": config_id_for(g, p, k, m, profile), "g": g, "p": p,
+         "k": k, "m": m, "q": p-k, "profile": profile}
+        for g, p, k, m in PAPER_CONFIGS for profile in PROFILES
+    ]
 
     summary_rows = []
     for config in configs:

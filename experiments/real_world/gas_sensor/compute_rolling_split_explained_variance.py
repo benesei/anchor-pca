@@ -1,23 +1,4 @@
-"""Compute publication gas-sensor rolling-split explained variance.
-
-This script is the single calculation entry point for the gas-sensor figures.
-For each last source batch s in 3, ..., 9, it fits representations on source
-batches B1--Bs only and evaluates them on both source batches and held-out
-target batches B(s+1)--B10. Feature standardization is re-fit within each split
-using source batches only.
-
-Computed full-representation methods:
-
-* poolPCA
-* AnchorPCA_lambda=1
-* AnchorPCA_lambda=10
-* AnchorPCA_infty
-* norm-maxRegret
-
-The script also evaluates the AnchorPCA_infty directions selected from the
-first empirical agreement block. This is a tolerance-dependent estimate of the
-invariant subspace S_star, not an oracle population quantity.
-"""
+"""Compute the gas-sensor rolling EV, first-block EV, and composition results."""
 
 from __future__ import annotations
 
@@ -52,7 +33,7 @@ def find_repo_root() -> Path:
 ROOT = find_repo_root()
 sys.path.insert(0, str(ROOT / "src"))
 
-from anchorpca import AnchorPCAInfty, AnchorPCALambda, pool_pca_from_covariances  # noqa: E402
+from anchorpca import AnchorPCAInfty, pool_pca_from_covariances  # noqa: E402
 from anchorpca.linalg import symmetrize  # noqa: E402
 from anchorpca.reproducibility import software_versions  # noqa: E402
 
@@ -65,22 +46,17 @@ EXPECTED_SHA256 = "98fe3a30981a222dd4518fbcc3dddd45d5c0ce9b03ef6dc6fe5cf7a04cfbf
 
 N_FEATURES = 128
 ALL_BATCHES = tuple(range(1, 11))
-DEFAULT_LAST_SOURCE_BATCHES = tuple(range(3, 10))
-DEFAULT_K_VALUES = (5, 10, 20, 30, 40)
-ANCHOR_LAMBDAS = (1.0, 10.0)
+DEFAULT_LAST_SOURCE_BATCHES = tuple(range(3, 9))
+DEFAULT_K_VALUES = (10, 20, 30)
 
 PUBLICATION_METHOD_ORDER = (
     "poolPCA",
-    "AnchorPCA_lambda=1",
-    "AnchorPCA_lambda=10",
     "AnchorPCA_infty",
     "norm-maxRegret",
 )
 
 METHOD_LABELS = {
     "poolPCA": "poolPCA",
-    "AnchorPCA_lambda=1": r"AnchorPCA$_{\lambda=1}$",
-    "AnchorPCA_lambda=10": r"AnchorPCA$_{\lambda=10}$",
     "AnchorPCA_infty": r"AnchorPCA$_{\infty}$",
     "norm-maxRegret": "norm-maxRegret",
     "AnchorPCA_infty_Sstar_first_block": r"AnchorPCA$_{\infty}$ estimated $S_\star$",
@@ -516,18 +492,6 @@ def fit_selected_representations(
         details={},
     )
 
-    for lambda_value in ANCHOR_LAMBDAS:
-        model = AnchorPCALambda(n_components=k, lambda_=lambda_value).fit_covariances(
-            source_covariances
-        )
-        method_id = f"AnchorPCA_lambda={int(lambda_value)}"
-        fitted[method_id] = FittedRepresentation(
-            method_id=method_id,
-            directions=np.asarray(model.directions_, dtype=float),
-            fit_source="anchorpca",
-            details={"lambda": float(lambda_value)},
-        )
-
     hard = AnchorPCAInfty(n_components=k, block_tol=block_tol).fit_covariances(
         source_covariances,
         n_obs=source_n_obs,
@@ -552,24 +516,25 @@ def fit_selected_representations(
         },
     )
 
-    minpca_seed = minpca_seed_for(
-        base_seed=minpca_base_seed,
-        last_source_batch=last_source_batch,
-        k=k,
-    )
-    # This official minPCA norm-maxRegret fit is the runtime bottleneck of the
-    # publication script. The defaults below use deterministic publication
-    # settings: n_restarts=10, n_iters=2000, lr=0.01, with seed tied to (s, k).
-    fitted["norm-maxRegret"] = fit_minpca_representation(
-        "norm-maxRegret",
-        source_covariances,
-        k,
-        n_restarts=minpca_restarts,
-        n_iters=minpca_iters,
-        lr=minpca_lr,
-        seed=minpca_seed,
-        verbose=minpca_verbose,
-    )
+    if last_source_batch == 6 and k == 20:
+        minpca_seed = minpca_seed_for(
+            base_seed=minpca_base_seed,
+            last_source_batch=last_source_batch,
+            k=k,
+        )
+        # This official minPCA norm-maxRegret fit is the runtime bottleneck of the
+        # publication script. The defaults below use deterministic publication
+        # settings: n_restarts=10, n_iters=2000, lr=0.01, with seed tied to (s, k).
+        fitted["norm-maxRegret"] = fit_minpca_representation(
+            "norm-maxRegret",
+            source_covariances,
+            k,
+            n_restarts=minpca_restarts,
+            n_iters=minpca_iters,
+            lr=minpca_lr,
+            seed=minpca_seed,
+            verbose=minpca_verbose,
+        )
 
     return fitted
 
@@ -634,6 +599,8 @@ def evaluate_representations(
 ) -> pd.DataFrame:
     rows = []
     for method_id in PUBLICATION_METHOD_ORDER:
+        if method_id not in fitted:
+            continue
         representation = fitted[method_id]
         for batch in source_batches:
             rows.append(
@@ -949,7 +916,6 @@ def write_outputs(
 
 def save_figure(fig, figures_dir: Path, stem: str, *, dpi: int = 600) -> None:
     figures_dir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(figures_dir / f"{stem}.png", dpi=dpi, bbox_inches="tight")
     fig.savefig(figures_dir / f"{stem}.pdf", bbox_inches="tight")
 
 
@@ -1038,7 +1004,7 @@ def plot_gas_composition(
         {
             "text.usetex": False,
             "font.family": "serif",
-            "font.serif": ["Palatino", "DejaVu Serif"],
+            "font.serif": ["Palatino", "TeX Gyre Pagella", "DejaVu Serif"],
             "mathtext.fontset": "cm",
             "font.size": 8,
             "axes.labelsize": 8,
@@ -1162,9 +1128,9 @@ def validate_last_source_batches(values: Iterable[int]) -> tuple[int, ...]:
     parsed = tuple(int(s) for s in values)
     if not parsed:
         raise ValueError("At least one last source batch is required.")
-    invalid = [s for s in parsed if s < 3 or s > 9]
+    invalid = [s for s in parsed if s < 3 or s > 8]
     if invalid:
-        raise ValueError(f"Publication rolling splits require s in 3..9; got {invalid}.")
+        raise ValueError(f"Publication rolling splits require s in 3..8; got {invalid}.")
     return parsed
 
 
@@ -1367,7 +1333,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=int,
         nargs="+",
         default=list(DEFAULT_LAST_SOURCE_BATCHES),
-        help="Last source batches s. Publication default is 3 4 5 6 7 8 9.",
+        help="Last source batches s. Publication default is 3 4 5 6 7 8.",
     )
     parser.add_argument(
         "--scale",

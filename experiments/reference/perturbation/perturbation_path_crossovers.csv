@@ -1,0 +1,5 @@
+left_method_id,right_method_id,rho_star
+poolPCA,maxRCS,6.083359964352
+maxRCS,norm-maxRegret,6.146909961943
+norm-maxRegret,AnchorPCA_lambda=25,9.792052632963
+AnchorPCA_lambda=25,AnchorPCA_infty,371.833783930449

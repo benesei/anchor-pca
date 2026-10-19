@@ -29,7 +29,7 @@ _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
 import compute_rolling_split_explained_variance as compute  # noqa: E402
-import plot_sstar_poolpca_tradeoff as same_dim  # noqa: E402
+import same_dim_utils as same_dim  # noqa: E402
 from anchorpca.reproducibility import repo_relative_path, software_versions  # noqa: E402
 
 
@@ -276,6 +276,9 @@ def build_same_dim_batch_table_from_inputs(
 
 
 def run(args: argparse.Namespace) -> None:
+    if args.plot_data_csv is not None:
+        plot_b9_b10_same_dim_ev(pd.read_csv(args.plot_data_csv), args.figures_dir, stem=args.plot_stem)
+        return
     experiment_dir = args.experiment_dir.resolve()
     results_dir = args.results_dir.resolve() if args.results_dir else experiment_dir / "results"
     figures_dir = args.figures_dir.resolve() if args.figures_dir else experiment_dir / "figures"
@@ -422,6 +425,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip the UCI archive SHA256 check.",
     )
+    parser.add_argument("--plot-data-csv", type=Path, help="Plot saved values without loading the dataset.")
     return parser
 
 

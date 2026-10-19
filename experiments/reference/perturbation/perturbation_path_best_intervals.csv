@@ -1,0 +1,6 @@
+rho_start,rho_end,best_method_id,best_method_label
+0.0,6.083359964352,poolPCA,poolPCA
+6.083359964352,6.146909961943,maxRCS,maxRCS
+6.146909961943,9.792052632963,norm-maxRegret,norm-maxRegret
+9.792052632963,371.833783930449,AnchorPCA_lambda=25,AnchorPCA$_{\lambda = 25}$
+371.833783930449,500.0,AnchorPCA_infty,AnchorPCA$_{\infty}$

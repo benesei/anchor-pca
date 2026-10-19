@@ -1,9 +1,8 @@
 """Create the publication source/target gas-sensor explained-variance plot.
 
-The plot is intentionally CSV-only: it reads
-``rolling_publication_explained_variance_all.csv`` produced by
-``compute_rolling_split_explained_variance.py`` and does not refit or recompute
-any representation.
+The plot reads the fixed-method CSV from
+``compute_rolling_split_explained_variance.py`` and the selected-fit CSV from
+``select_penalty.py``. It does not refit any representation.
 """
 
 from __future__ import annotations
@@ -34,31 +33,56 @@ from anchorpca.reproducibility import repo_relative_path, software_versions  # n
 DEFAULT_K = 20
 DEFAULT_LAST_SOURCE_BATCH = 6
 EXPLAINED_VARIANCE_CSV = "rolling_publication_explained_variance_all.csv"
+SELECTED_EV_CSV = "penalty_selection/selected_ev_by_batch.csv"
+SELECTED_METHOD = "source_selected_Anchor_PCA"
 
 PLOT_METHOD_ORDER = (
     "poolPCA",
-    "AnchorPCA_lambda=1",
+    SELECTED_METHOD,
     "AnchorPCA_infty",
     "norm-maxRegret",
 )
 LEGEND_METHOD_ORDER = (
     "AnchorPCA_infty",
-    "AnchorPCA_lambda=1",
+    SELECTED_METHOD,
     "norm-maxRegret",
     "poolPCA",
 )
 PLOT_LABELS = {
     "poolPCA": "poolPCA",
-    "AnchorPCA_lambda=1": r"AnchorPCA$_{\lambda=1}$",
+    SELECTED_METHOD: r"AnchorPCA$_{\widehat{\lambda}}$",
     "AnchorPCA_infty": r"AnchorPCA$_\infty$",
     "norm-maxRegret": "norm-maxRegret",
 }
 PLOT_STYLES = {
     "poolPCA": {"color": "tab:blue", "linestyle": "-", "zorder": 4},
-    "AnchorPCA_lambda=1": {"color": "#6A3D9A", "linestyle": "-", "zorder": 1},
+    SELECTED_METHOD: {"color": "#6A3D9A", "linestyle": "-", "zorder": 1},
     "AnchorPCA_infty": {"color": "#D62728", "linestyle": "-", "zorder": 3},
     "norm-maxRegret": {"color": "#E69F00", "linestyle": "-", "zorder": 2},
 }
+
+
+def combine_plot_rows(base: pd.DataFrame, selected: pd.DataFrame) -> pd.DataFrame:
+    """Add source-selected fits, checking consistency of the shared baselines."""
+    keys = ["last_source_batch", "k", "split", "batch", "method_id"]
+    value = "percent_explained_variance"
+    for frame in (base, selected):
+        missing = set([*keys, value]).difference(frame.columns)
+        if missing:
+            raise ValueError(f"Explained-variance CSV is missing columns: {sorted(missing)}")
+        if frame.duplicated(keys).any():
+            raise ValueError("Duplicate per-batch explained-variance rows.")
+    selected = selected.copy()
+    selected["method_id"] = selected["method_id"].replace(
+        {"Anchor_PCA_infinity": "AnchorPCA_infty"}
+    )
+    shared = base.merge(selected, on=keys, suffixes=("_base", "_selected"))
+    if not np.allclose(shared[value + "_base"], shared[value + "_selected"], atol=1e-8, rtol=0):
+        raise ValueError("The input CSVs disagree on baseline EV; check their protocols.")
+    added = selected[selected.method_id == SELECTED_METHOD]
+    if added.empty or "selected_two_e_lambda" not in added:
+        raise ValueError("Source-selected rows and their selected coefficients are required.")
+    return pd.concat([base[base.method_id != SELECTED_METHOD], added], ignore_index=True)
 
 
 def configure_publication_style() -> None:
@@ -67,7 +91,7 @@ def configure_publication_style() -> None:
         {
             "text.usetex": False,
             "font.family": "serif",
-            "font.serif": ["Palatino", "DejaVu Serif"],
+            "font.serif": ["Palatino", "TeX Gyre Pagella", "DejaVu Serif"],
             "mathtext.fontset": "cm",
             "font.size": 8,
             "axes.labelsize": 9,
@@ -90,7 +114,6 @@ def configure_publication_style() -> None:
 
 def save_figure(fig, figures_dir: Path, stem: str) -> None:
     figures_dir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(figures_dir / f"{stem}.png", dpi=600, bbox_inches="tight")
     fig.savefig(figures_dir / f"{stem}.pdf", bbox_inches="tight")
 
 
@@ -333,7 +356,7 @@ def plot_source_target(
 
     handles, labels = axes[0].get_legend_handles_labels()
     handles_by_label = dict(zip(labels, handles))
-    fig.legend(
+    legend = fig.legend(
         [handles_by_label[PLOT_LABELS[method_id]] for method_id in LEGEND_METHOD_ORDER],
         [PLOT_LABELS[method_id] for method_id in LEGEND_METHOD_ORDER],
         title="Method",
@@ -341,8 +364,18 @@ def plot_source_target(
         bbox_to_anchor=(0.82, 0.62),
         frameon=False,
         borderaxespad=0,
+        labelspacing=0.75,
     )
     fig.tight_layout(rect=(0.0, 0.0, 0.82, 1.0), w_pad=1.2)
+    fig.set_size_inches(6, 1.7)
+    for ax in axes:
+        ax.yaxis.label.set_size(8)
+        ax.tick_params(axis="x", rotation=0)
+        for tick in ax.get_xticklabels():
+            tick.set_ha("center")
+    fig.tight_layout(rect=(0, 0, .82, 1), w_pad=1.2)
+    from anchorpca.reproducibility import equal_legend_rows
+    equal_legend_rows(legend)
     save_figure(fig, figures_dir, plot_stem)
     plt.close(fig)
     return improvement
@@ -354,7 +387,8 @@ def run(args: argparse.Namespace) -> None:
     figures_dir = args.figures_dir.resolve() if args.figures_dir else experiment_dir / "figures"
     input_csv = args.input_csv.resolve() if args.input_csv else results_dir / EXPLAINED_VARIANCE_CSV
 
-    all_results = pd.read_csv(input_csv)
+    selected_csv = args.selected_ev_csv.resolve() if args.selected_ev_csv else results_dir / SELECTED_EV_CSV
+    all_results = combine_plot_rows(pd.read_csv(input_csv), pd.read_csv(selected_csv))
     rows = select_source_target_rows(
         all_results,
         last_source_batch=args.last_source_batch,
@@ -380,6 +414,10 @@ def run(args: argparse.Namespace) -> None:
             {
                 "software_versions": software_versions(),
                 "input_csv": repo_relative_path(input_csv),
+                "selected_ev_csv": repo_relative_path(selected_csv),
+                "selected_two_e_lambda": float(
+                    rows.loc[rows.method_id == SELECTED_METHOD, "selected_two_e_lambda"].iloc[0]
+                ),
                 "k": int(args.k),
                 "last_source_batch": int(args.last_source_batch),
                 "source_batches": list(source_batches),
@@ -392,7 +430,7 @@ def run(args: argparse.Namespace) -> None:
                 "arrow_label_position": args.arrow_label_position,
                 "target_spacing_scale": float(args.target_spacing_scale),
                 "note": (
-                    "The plot reads only rows from the publication CSV. "
+                    "The plot reads only saved per-batch EV rows. "
                     "No method is refit and no EV value is recomputed here."
                 ),
             },
@@ -409,6 +447,8 @@ def run(args: argparse.Namespace) -> None:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--selected-ev-csv", type=Path, default=None,
+                        help="Per-batch source/target CSV from select_penalty.py.")
     parser.add_argument(
         "--experiment-dir",
         type=Path,

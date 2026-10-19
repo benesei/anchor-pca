@@ -1,9 +1,8 @@
 """Create the cleaned publication rolling-split source/target summary plot.
 
-The plot reads the full per-batch explained-variance CSV produced by
-``compute_rolling_split_explained_variance.py`` and averages the same methods
-over source batches and target batches. It shows k in {10, 20, 30} and
-s in {3, ..., 8}; k=5, k=40, and s=9 are intentionally excluded.
+The plot combines fixed-method and source-selected per-batch CSVs. It shows
+source/target EV with min--max bands and a strip of selected penalties, for
+k in {10, 20, 30} and s in {3, ..., 8}.
 """
 
 from __future__ import annotations
@@ -17,6 +16,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.patches import Rectangle  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
@@ -25,12 +25,13 @@ sys.path.insert(0, str(_HERE))
 
 from compute_rolling_split_explained_variance import to_jsonable  # noqa: E402
 from anchorpca.reproducibility import repo_relative_path, software_versions  # noqa: E402
+from plot_source_target_EV import combine_plot_rows, SELECTED_EV_CSV, SELECTED_METHOD  # noqa: E402
 
 
 EXPLAINED_VARIANCE_CSV = "rolling_publication_explained_variance_all.csv"
 ROLLING_PLOT_K_VALUES = (10, 20, 30)
 ROLLING_PLOT_LAST_SOURCE_BATCHES = tuple(range(3, 9))
-ROLLING_PLOT_METHODS = ("poolPCA", "AnchorPCA_lambda=1", "AnchorPCA_infty")
+ROLLING_PLOT_METHODS = ("poolPCA", SELECTED_METHOD, "AnchorPCA_infty")
 ROLLING_PLOT_SPLITS = ("source", "target")
 ROLLING_PLOT_BAND_METHODS = ("poolPCA", "AnchorPCA_infty")
 ROLLING_PLOT_ROW_YLIMS = {
@@ -40,12 +41,12 @@ ROLLING_PLOT_ROW_YLIMS = {
 
 METHOD_LABELS = {
     "poolPCA": "poolPCA",
-    "AnchorPCA_lambda=1": r"AnchorPCA$_{\lambda=1}$",
+    SELECTED_METHOD: r"AnchorPCA$_{\widehat{\lambda}}$",
     "AnchorPCA_infty": r"AnchorPCA$_\infty$",
 }
 METHOD_STYLES = {
     "poolPCA": {"color": "tab:blue", "linestyle": "-", "marker": "o"},
-    "AnchorPCA_lambda=1": {"color": "#6A3D9A", "linestyle": "-", "marker": "o"},
+    SELECTED_METHOD: {"color": "#6A3D9A", "linestyle": "-", "marker": "D"},
     "AnchorPCA_infty": {"color": "#D62728", "linestyle": "-", "marker": "o"},
 }
 
@@ -55,7 +56,7 @@ def configure_publication_style() -> None:
         {
             "text.usetex": False,
             "font.family": "serif",
-            "font.serif": ["Palatino", "DejaVu Serif"],
+            "font.serif": ["Palatino", "TeX Gyre Pagella", "DejaVu Serif"],
             "mathtext.fontset": "cm",
             "font.size": 8,
             "axes.labelsize": 8,
@@ -79,7 +80,6 @@ def configure_publication_style() -> None:
 
 def save_figure(fig, figures_dir: Path, stem: str) -> None:
     figures_dir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(figures_dir / f"{stem}.png", dpi=600, bbox_inches="tight")
     fig.savefig(figures_dir / f"{stem}.pdf", bbox_inches="tight")
 
 
@@ -133,14 +133,6 @@ def select_rolling_plot_data(
             f"Expected {expected_raw_n} selected per-batch rows but found {len(filtered)}."
         )
 
-    excluded_k = {5, 40}
-    if filtered["k"].isin(excluded_k).any():
-        raise RuntimeError("k=5 and k=40 must be excluded from the rolling publication plot.")
-    if (filtered["last_source_batch"] == 9).any():
-        raise RuntimeError("s=9 must be excluded from the rolling publication plot.")
-    if (filtered["method_id"] == "AnchorPCA_lambda=10").any():
-        raise RuntimeError("AnchorPCA_lambda=10 must be excluded from this plot.")
-
     split_rows = (
         filtered.groupby(["split", "last_source_batch", "k", "method_id"], as_index=False)
         .agg(
@@ -181,7 +173,27 @@ def select_rolling_plot_data(
     split_rows = split_rows.sort_values(
         ["split_rank", "k", "last_source_batch", "method_rank"]
     ).reset_index(drop=True)
-    return split_rows.drop(columns=["method_rank", "split_rank"])
+    selected = filtered[filtered.method_id == SELECTED_METHOD]
+    if "selected_two_e_lambda" not in selected:
+        raise ValueError("Selected coefficients are required for the penalty strip.")
+    grouped = selected.groupby(["last_source_batch", "k"]).selected_two_e_lambda
+    if not grouped.nunique().eq(1).all():
+        raise ValueError("Each split/rank must have exactly one selected coefficient.")
+    penalties = grouped.first().reset_index()
+    return split_rows.drop(columns=["method_rank", "split_rank"]).merge(
+        penalties, on=["last_source_batch", "k"], validate="many_to_one"
+    )
+
+
+def format_penalty(value: float) -> str:
+    if np.isposinf(value):
+        return r"$\infty$"
+    if value in (0.0, 1.0):
+        return f"${value:g}$"
+    exponent = np.log10(value)
+    if value > 0 and np.isclose(exponent, round(exponent)):
+        return rf"$10^{{{int(round(exponent))}}}$"
+    return f"${value:g}$"
 
 
 def plot_rolling_summary(
@@ -193,11 +205,11 @@ def plot_rolling_summary(
     configure_publication_style()
     k_values = tuple(sorted(plot_rows["k"].unique()))
     fig, axes = plt.subplots(
-        len(ROLLING_PLOT_SPLITS),
+        len(ROLLING_PLOT_SPLITS) + 1,
         len(k_values),
-        figsize=(7.0, 4.25),
+        figsize=(7.0, 4.85),
         sharex=True,
-        sharey="row",
+        gridspec_kw={"height_ratios": [1, 1, 0.22]},
     )
     axes = np.atleast_2d(axes)
 
@@ -244,20 +256,41 @@ def plot_rolling_summary(
             if row_idx == 0:
                 ax.set_title(f"k={int(k)}")
             if row_idx == len(ROLLING_PLOT_SPLITS) - 1:
-                ax.set_xlabel("Last source batch s")
+                ax.tick_params(axis="x", labelbottom=True)
             ax.set_xticks(sorted(sub["last_source_batch"].unique()))
             ax.set_ylim(*ROLLING_PLOT_ROW_YLIMS[split])
             ax.grid(False)
             if col_idx == 0:
                 ax.set_ylabel(row_labels[split])
+            else:
+                ax.tick_params(axis="y", labelleft=False)
             legend_handles, legend_labels = ax.get_legend_handles_labels()
 
+    for col_idx, k in enumerate(k_values):
+        ax = axes[-1, col_idx]
+        penalties = plot_rows[plot_rows.k == k][
+            ["last_source_batch", "selected_two_e_lambda"]
+        ].drop_duplicates().sort_values("last_source_batch")
+        for item in penalties.itertuples(index=False):
+            x = int(item.last_source_batch)
+            ax.add_patch(Rectangle((x - 0.43, 0.12), 0.86, 0.76,
+                                   facecolor="#f2eef7", edgecolor="none",
+                                   clip_on=False))
+            ax.text(x, 0.5, format_penalty(item.selected_two_e_lambda),
+                    ha="center", va="center", fontsize=8)
+        ax.set_ylim(0, 1)
+        ax.axis("off")
+        if col_idx == 0:
+            ax.text(-0.12, 0.5, "Selected\n$2E\\lambda$", transform=ax.transAxes,
+                    ha="right", va="center", fontsize=8)
+    fig.supxlabel("Last source batch $s$", y=0.035, fontsize=8)
     fig.legend(
         legend_handles,
         legend_labels,
         loc="lower center",
         bbox_to_anchor=(0.5, -0.04),
         ncol=min(3, len(legend_labels) if legend_labels else 3),
+        columnspacing=2.0,
         frameon=False,
     )
     fig.tight_layout(rect=(0.0, 0.06, 1.0, 1.0), w_pad=0.8, h_pad=1.0)
@@ -271,7 +304,8 @@ def run(args: argparse.Namespace) -> None:
     figures_dir = args.figures_dir.resolve() if args.figures_dir else experiment_dir / "figures"
     ev_csv = args.explained_variance_csv.resolve() if args.explained_variance_csv else results_dir / EXPLAINED_VARIANCE_CSV
 
-    all_results = pd.read_csv(ev_csv)
+    selected_csv = args.selected_ev_csv.resolve() if args.selected_ev_csv else results_dir / SELECTED_EV_CSV
+    all_results = combine_plot_rows(pd.read_csv(ev_csv), pd.read_csv(selected_csv))
     plot_rows = select_rolling_plot_data(all_results)
     plot_rolling_summary(plot_rows, figures_dir)
 
@@ -285,25 +319,21 @@ def run(args: argparse.Namespace) -> None:
             {
                 "software_versions": software_versions(),
                 "explained_variance_csv": repo_relative_path(ev_csv),
+                "selected_ev_csv": repo_relative_path(selected_csv),
                 "splits": list(ROLLING_PLOT_SPLITS),
                 "k_values": list(ROLLING_PLOT_K_VALUES),
                 "last_source_batches": list(ROLLING_PLOT_LAST_SOURCE_BATCHES),
                 "methods": list(ROLLING_PLOT_METHODS),
                 "band_methods": list(ROLLING_PLOT_BAND_METHODS),
                 "row_y_limits": ROLLING_PLOT_ROW_YLIMS,
-                "excluded": {
-                    "k": [5, 40],
-                    "last_source_batch": [9],
-                    "method_id": ["AnchorPCA_lambda=10"],
-                },
                 "note": (
-                    "This plot reads rolling_publication_explained_variance_all.csv. "
+                    "This plot reads fixed-method and source-selected per-batch CSVs. "
                     "The top row shows mean source-batch explained variance and the "
-                    "bottom row shows mean target-batch explained variance. Shaded "
+                    "middle row shows mean target-batch explained variance. Shaded "
                     "bands are min-max over batches in the corresponding split and "
                     "are shown only for poolPCA and AnchorPCA_infty. Source-row "
                     "y-limits are fixed at 60-100%; target-row y-limits are fixed "
-                    "at 20-100%."
+                    "at 20-100%. The bottom strip gives the source-selected coefficient."
                 ),
             },
             handle,
@@ -316,6 +346,8 @@ def run(args: argparse.Namespace) -> None:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--selected-ev-csv", type=Path, default=None,
+                        help="Per-batch source/target CSV from select_penalty.py.")
     parser.add_argument(
         "--experiment-dir",
         type=Path,

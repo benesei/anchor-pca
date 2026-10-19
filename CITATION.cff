@@ -5,7 +5,7 @@ type: software
 version: "0.1.0"
 date-released: "2026-05-23"
 license: MIT
-url: "https://arxiv.org/abs/2606.06233"
+url: "https://github.com/benesei/anchor-pca"
 authors:
   - family-names: Seiter
     given-names: Benedikt
@@ -16,7 +16,7 @@ authors:
   - family-names: Peters
     given-names: Jonas
 preferred-citation:
-  type: article
+  type: conference-paper
   title: "Anchor PCA"
   authors:
     - family-names: Seiter
@@ -27,6 +27,9 @@ preferred-citation:
       given-names: Julius
     - family-names: Peters
       given-names: Jonas
+  collection-title: "Advances in Neural Information Processing Systems"
+  conference:
+    name: "NeurIPS 2026"
   year: 2026
   url: "https://arxiv.org/abs/2606.06233"
   identifiers:

@@ -1,291 +1,123 @@
-"""Check experiment outputs after reproduction.
-
-The script is non-mutating. By default it checks source files and reports the
-status of generated outputs. With ``--require-generated`` it fails if paper
-figures or upstream CSV/metadata files are missing or inconsistent.
-"""
-
+"""Check all paper outputs against the saved numerical reference results."""
 from __future__ import annotations
 
 import argparse
 import json
-import sys
-from dataclasses import dataclass
 from pathlib import Path
-
+import numpy as np
 import pandas as pd
 
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-
-
-@dataclass(frozen=True)
-class PaperFigure:
-    label: str
-    script: str
-    output_pdf: str
-    upstream: tuple[str, ...] = ()
+HERE = Path(__file__).resolve().parent
+MANIFEST = json.loads((HERE / "paper_outputs.json").read_text())
+REFERENCE = HERE / "reference"
 
 
-PAPER_FIGURES = (
-    PaperFigure(
-        "4d_motivation_exp_quotient_view",
-        "experiments/synthetic/01_motivating_example_4d/run_motivating_example.py",
-        "experiments/synthetic/01_motivating_example_4d/figures/4d_motivation_exp_quotient_view.pdf",
-        ("experiments/synthetic/01_motivating_example_4d/results/paper_table_check.json",),
-    ),
-    PaperFigure(
-        "perturbation_path",
-        "experiments/synthetic/02_perturbation_path/run_perturbation_path.py",
-        "experiments/synthetic/02_perturbation_path/figures/perturbation_path.pdf",
-        ("experiments/synthetic/02_perturbation_path/results/perturbation_path_curves.csv",),
-    ),
-    PaperFigure(
-        "infty_sstar_recovery_gaussian_g5_p10_k5_m2_main",
-        "experiments/synthetic/03_random_subspace_sstar/plot_infty_sstar_recovery.py",
-        "experiments/synthetic/03_random_subspace_sstar/figures/infty_sstar_recovery_gaussian_g5_p10_k5_m2_main.pdf",
-        (
-            "experiments/synthetic/03_random_subspace_sstar/results/infty_sstar_recovery/summary_by_curve.csv",
-            "experiments/synthetic/03_random_subspace_sstar/results/infty_sstar_recovery_main_seqtest/summary_by_curve_seqtest.csv",
-        ),
-    ),
-    PaperFigure(
-        "infty_sstar_recovery_gaussian_mixture_g5_p10_k5_m2_main",
-        "experiments/synthetic/03_random_subspace_sstar/plot_infty_sstar_recovery.py",
-        "experiments/synthetic/03_random_subspace_sstar/figures/infty_sstar_recovery_gaussian_mixture_g5_p10_k5_m2_main.pdf",
-        ("experiments/synthetic/03_random_subspace_sstar/results/infty_sstar_recovery/summary_by_curve.csv",),
-    ),
-    PaperFigure(
-        "infty_sstar_recovery_gaussian_g5_p8_k5_m1",
-        "experiments/synthetic/03_random_subspace_sstar/plot_infty_sstar_recovery.py",
-        "experiments/synthetic/03_random_subspace_sstar/figures/infty_sstar_recovery_gaussian_g5_p8_k5_m1.pdf",
-        ("experiments/synthetic/03_random_subspace_sstar/results/infty_sstar_recovery/summary_by_curve.csv",),
-    ),
-    PaperFigure(
-        "infty_sstar_recovery_g2_p8_k5_m2_combined_extended_n100000",
-        "experiments/synthetic/03_random_subspace_sstar/plot_infty_sstar_recovery.py",
-        "experiments/synthetic/03_random_subspace_sstar/figures/infty_sstar_recovery_g2_p8_k5_m2_combined_extended_n100000.pdf",
-        (
-            "experiments/synthetic/03_random_subspace_sstar/results/infty_sstar_recovery/summary_by_curve.csv",
-            "experiments/synthetic/03_random_subspace_sstar/results/infty_sstar_recovery_g2_low_environment_stress/summary_by_curve.csv",
-            "experiments/synthetic/03_random_subspace_sstar/results/infty_sstar_recovery_g2_low_environment_stress/summary_by_curve_seqtest.csv",
-        ),
-    ),
-    PaperFigure(
-        "gas_sensor_class_composition_by_batch",
-        "experiments/real_world/gas_sensor/compute_rolling_split_explained_variance.py",
-        "experiments/real_world/gas_sensor/figures/gas_sensor_class_composition_by_batch.pdf",
-        ("experiments/real_world/gas_sensor/results/gas_sensor_class_composition_by_batch.csv",),
-    ),
-    PaperFigure(
-        "gas_sensor_publication_b1_b6_source_target_k20",
-        "experiments/real_world/gas_sensor/plot_source_target_EV.py",
-        "experiments/real_world/gas_sensor/figures/gas_sensor_publication_b1_b6_source_target_k20.pdf",
-        ("experiments/real_world/gas_sensor/results/rolling_publication_explained_variance_all.csv",),
-    ),
-    PaperFigure(
-        "rolling_publication_target_ev_combined",
-        "experiments/real_world/gas_sensor/plot_rolling_split_summary.py",
-        "experiments/real_world/gas_sensor/figures/rolling_publication_target_ev_combined.pdf",
-        ("experiments/real_world/gas_sensor/results/rolling_publication_explained_variance_all.csv",),
-    ),
-    PaperFigure(
-        "sstar_poolpca_same_dim_b9_b10_ev",
-        "experiments/real_world/gas_sensor/plot_sstar_poolpca_target_batches.py",
-        "experiments/real_world/gas_sensor/figures/sstar_poolpca_same_dim_b9_b10_ev.pdf",
-        ("experiments/real_world/gas_sensor/results/rolling_publication_anchor_infty_sstar_all.csv",),
-    ),
-)
-
-PAPER_BASE_CONFIGS = {"g5_p10_k5_m2", "g5_p8_k5_m1", "g2_p8_k5_m2"}
-STANDARD_N = {50, 100, 200, 500, 1000, 2000, 5000}
-EXTENDED_N = STANDARD_N | {10000, 30000, 100000}
-PROFILES = {"balanced", "threshold_stress"}
+def compare_csv(expected_path: Path, actual_path: Path) -> list[str]:
+    expected, actual = pd.read_csv(expected_path), pd.read_csv(actual_path)
+    if not set(expected.columns).issubset(actual.columns) or len(expected) != len(actual):
+        return ["columns or row counts differ"]
+    actual = actual[expected.columns]
+    keys = [column for column in expected if not pd.api.types.is_float_dtype(expected[column])]
+    if keys:
+        expected = expected.sort_values(keys, na_position="last").reset_index(drop=True)
+        actual = actual.sort_values(keys, na_position="last").reset_index(drop=True)
+    differences = []
+    for column in expected:
+        left, right = expected[column], actual[column]
+        if pd.api.types.is_numeric_dtype(left):
+            matches = np.isclose(left.to_numpy(dtype=float), right.to_numpy(dtype=float),
+                                 rtol=1e-6, atol=1e-8, equal_nan=True)
+        else:
+            matches = left.fillna("").eq(right.fillna("")).to_numpy()
+        if not np.all(matches):
+            differences.append(f"{column}: {int((~matches).sum())} different values")
+    return differences
 
 
-def rel(path: Path) -> str:
-    return str(path.relative_to(REPO_ROOT))
-
-
-def require_path(path: str, errors: list[str], warnings: list[str], *, require: bool) -> bool:
-    full = REPO_ROOT / path
-    if full.exists():
-        return True
-    message = f"Missing generated output: {path}"
-    if require:
-        errors.append(message)
-    else:
-        warnings.append(message)
-    return False
-
-
-def check_manifest(require_generated: bool) -> tuple[list[str], list[str]]:
-    errors: list[str] = []
-    warnings: list[str] = []
-    for item in PAPER_FIGURES:
-        if not (REPO_ROOT / item.script).exists():
-            errors.append(f"Missing generating script for {item.label}: {item.script}")
-        require_path(item.output_pdf, errors, warnings, require=require_generated)
-        for upstream in item.upstream:
-            require_path(upstream, errors, warnings, require=require_generated)
-    return errors, warnings
-
-
-def read_csv_if_exists(path: str) -> pd.DataFrame | None:
-    full = REPO_ROOT / path
-    if not full.exists():
-        return None
-    return pd.read_csv(full)
-
-
-def base_config_from_row(row: pd.Series) -> str:
-    return f"g{int(row['g'])}_p{int(row['p'])}_k{int(row['k'])}_m{int(row['m'])}"
-
-
-def check_design_bank(errors: list[str], warnings: list[str], *, require_generated: bool) -> None:
-    issues = errors if require_generated else warnings
-    path = "experiments/synthetic/03_random_subspace_sstar/results/design_bank/design_summary.csv"
-    df = read_csv_if_exists(path)
-    if df is None:
-        require_path(path, errors, warnings, require=require_generated)
-        return
-    df = df.copy()
-    df["base_config"] = df.apply(base_config_from_row, axis=1)
-    for base_config in PAPER_BASE_CONFIGS:
-        for profile in PROFILES:
-            rows = df[(df["base_config"] == base_config) & (df["profile"] == profile)]
-            if require_generated and len(rows) != 100:
-                issues.append(
-                    f"Design bank has {len(rows)} rows for {profile}_{base_config}; expected 100."
-                )
-            elif rows.empty:
-                warnings.append(f"Design bank does not contain {profile}_{base_config}.")
-
-def check_infty_recovery(errors: list[str], warnings: list[str], *, require_generated: bool) -> None:
-    issues = errors if require_generated else warnings
-    path = "experiments/synthetic/03_random_subspace_sstar/results/infty_sstar_recovery/raw_runs.csv"
-    df = read_csv_if_exists(path)
-    if df is None:
-        require_path(path, errors, warnings, require=require_generated)
-        return
-    df = df.copy()
-    df["base_config"] = df.apply(base_config_from_row, axis=1)
-    expected_standard = {"g5_p10_k5_m2", "g5_p8_k5_m1"}
-    for base_config in expected_standard:
-        rows = df[df["base_config"] == base_config]
-        if rows.empty:
-            issues.append(f"Missing standard recovery rows for {base_config}.")
-            continue
-        if set(rows["N"].unique()) != STANDARD_N:
-            issues.append(f"Unexpected N grid for {base_config}: {sorted(rows['N'].unique())}.")
-        if set(rows["profile"].unique()) != PROFILES:
-            issues.append(f"Unexpected profiles for {base_config}: {sorted(rows['profile'].unique())}.")
-        if set(rows["distribution"].unique()) != {"gaussian", "gaussian_mixture"}:
-            issues.append(
-                f"Unexpected distributions for {base_config}: {sorted(rows['distribution'].unique())}."
-            )
-        if require_generated and len(rows) != 2 * 2 * 7 * 100 * 20:
-            issues.append(f"Unexpected row count for {base_config}: {len(rows)}.")
-    extra = set(df["base_config"].unique()) - expected_standard
-    if extra:
-        warnings.append(f"Standard recovery CSV contains optional non-paper configs: {sorted(extra)}.")
-
-    g2_path = (
-        "experiments/synthetic/03_random_subspace_sstar/results/"
-        "infty_sstar_recovery_g2_low_environment_stress/raw_runs.csv"
-    )
-    g2 = read_csv_if_exists(g2_path)
-    if g2 is None:
-        require_path(g2_path, errors, warnings, require=require_generated)
-        return
-    if set(g2["N"].unique()) != EXTENDED_N:
-        issues.append(f"Unexpected g2 extended N grid: {sorted(g2['N'].unique())}.")
-    if set(g2["distribution"].unique()) != {"gaussian"}:
-        issues.append(f"Unexpected g2 distributions: {sorted(g2['distribution'].unique())}.")
-    if require_generated and len(g2) != 2 * 10 * 100 * 20:
-        issues.append(f"Unexpected g2 recovery row count: {len(g2)}.")
-
-
-def check_gas_sensor(errors: list[str], warnings: list[str], *, require_generated: bool) -> None:
-    issues = errors if require_generated else warnings
-    path = "experiments/real_world/gas_sensor/results/rolling_publication_explained_variance_all.csv"
-    df = read_csv_if_exists(path)
-    if df is None:
-        require_path(path, errors, warnings, require=require_generated)
-        return
-    expected_methods = {
-        "poolPCA",
-        "AnchorPCA_lambda=1",
-        "AnchorPCA_lambda=10",
-        "AnchorPCA_infty",
-        "norm-maxRegret",
-    }
-    if set(df["method_id"].unique()) != expected_methods:
-        issues.append(f"Unexpected gas methods: {sorted(df['method_id'].unique())}.")
-    if set(df["k"].unique()) != {5, 10, 20, 30, 40}:
-        issues.append(f"Unexpected gas k grid: {sorted(df['k'].unique())}.")
-    if set(df["last_source_batch"].unique()) != {3, 4, 5, 6, 7, 8, 9}:
-        issues.append(
-            f"Unexpected gas last-source grid: {sorted(df['last_source_batch'].unique())}."
-        )
-    if require_generated and len(df) != 1750:
-        issues.append(f"Unexpected gas explained-variance row count: {len(df)}; expected 1750.")
-
-    metadata_path = "experiments/real_world/gas_sensor/results/rolling_publication_metadata.json"
-    full = REPO_ROOT / metadata_path
-    if full.exists():
-        metadata = json.loads(full.read_text())
-        if metadata.get("archive_sha256") != "98fe3a30981a222dd4518fbcc3dddd45d5c0ce9b03ef6dc6fe5cf7a04cfbff5e":
-            issues.append("Gas metadata has unexpected archive SHA256.")
-    else:
-        require_path(metadata_path, errors, warnings, require=require_generated)
-
-
-def check_metadata_presence(errors: list[str], warnings: list[str], *, require_generated: bool) -> None:
-    issues = errors if require_generated else warnings
-    for path in (
-        "experiments/synthetic/03_random_subspace_sstar/results/design_bank/metadata.json",
-        "experiments/synthetic/03_random_subspace_sstar/results/infty_sstar_recovery/metadata.json",
-        "experiments/synthetic/03_random_subspace_sstar/results/infty_sstar_recovery_main_seqtest/metadata.json",
-        "experiments/synthetic/03_random_subspace_sstar/results/infty_sstar_recovery_g2_low_environment_stress/metadata.json",
-        "experiments/real_world/gas_sensor/results/rolling_publication_metadata.json",
-    ):
-        if require_path(path, errors, warnings, require=require_generated):
-            metadata = json.loads((REPO_ROOT / path).read_text())
-            if "software_versions" not in metadata:
-                issues.append(f"Metadata file lacks software_versions: {path}")
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--require-generated",
-        action="store_true",
-        help="Fail when generated paper outputs or full-run row counts are missing.",
-    )
-    return parser.parse_args()
-
-
-def main() -> int:
-    args = parse_args()
-    errors, warnings = check_manifest(args.require_generated)
-    check_metadata_presence(errors, warnings, require_generated=args.require_generated)
-    check_design_bank(errors, warnings, require_generated=args.require_generated)
-    check_infty_recovery(errors, warnings, require_generated=args.require_generated)
-    check_gas_sensor(errors, warnings, require_generated=args.require_generated)
-
-    if warnings:
-        print("Warnings:")
-        for warning in warnings:
-            print(f"  - {warning}")
-    if errors:
-        print("Errors:")
-        for error in errors:
-            print(f"  - {error}")
-        return 1
-    print("Reproduction output check passed.")
-    return 0
+def check(output: Path) -> dict[str, object]:
+    failures, revised_data = [], []
+    for item in MANIFEST["figures"] + MANIFEST["tables"] + MANIFEST["summaries"]:
+        path = output / item["path"]
+        if not path.is_file() or path.stat().st_size == 0:
+            failures.append(f"Missing {item['label']}: {item['path']}")
+    original = json.loads((REFERENCE / "fama_french/protocol.json").read_text())
+    current_path = output / MANIFEST["result_groups"]["fama_french"] / "protocol.json"
+    current = json.loads(current_path.read_text()) if current_path.exists() else {}
+    same_fama_data = current.get("used_periods_sha256") == original["used_periods_sha256"]
+    for group, destination in MANIFEST["result_groups"].items():
+        for reference in sorted((REFERENCE / group).rglob("*.csv")):
+            relative = reference.relative_to(REFERENCE / group)
+            actual = output / destination / relative
+            if not actual.is_file():
+                failures.append(f"Missing numerical output: {destination}/{relative}")
+                continue
+            differences = compare_csv(reference, actual)
+            if differences:
+                message = f"{group}/{relative}: " + "; ".join(differences)
+                (revised_data if group == "fama_french" and not same_fama_data else failures).append(message)
+    for reference in sorted((REFERENCE / "tables").glob("*.csv")):
+        actual = output / "tables" / reference.name
+        if actual.is_file():
+            differences = compare_csv(reference, actual)
+            if differences:
+                message = f"{reference.name}: " + "; ".join(differences)
+                (revised_data if reference.name in {"table7.csv", "table8.csv"} and not same_fama_data else failures).append(message)
+    # Check the source-validation means and maxima independently of stored summaries.
+    gas = output / MANIFEST["result_groups"]["gas_sensor"] / "penalty_selection"
+    folds = pd.read_csv(gas / "penalty_validation_folds.csv")
+    summary = pd.read_csv(gas / "penalty_validation_summary.csv")
+    keys = ["last_source_batch", "k", "candidate_order", "two_e_lambda"]
+    means = folds.groupby(keys, dropna=False)["heldout_total_ev_fraction"].mean().reset_index()
+    merged = summary.merge(means, on=keys, validate="one_to_one")
+    if len(merged) != 18 * 9 or not np.allclose(merged.mean_total_ev_fraction, merged.heldout_total_ev_fraction, rtol=0, atol=1e-12):
+        failures.append("Gas validation summaries do not match equal-fold mean EV fractions.")
+    finite = folds[np.isfinite(folds.two_e_lambda)]
+    if not np.allclose(finite.raw_lambda_fold, finite.two_e_lambda / (2 * (finite.last_source_batch - 1))):
+        failures.append("Gas fold penalties do not preserve the effective coefficient.")
+    selection = pd.read_csv(gas / "selection_summary.csv")
+    if len(selection) != 18 or set(selection.k) != {10, 20, 30} or set(selection.last_source_batch) != set(range(3, 9)):
+        failures.append("Gas selection must cover the 18 paper settings.")
+    for (split, rank), candidates in summary.groupby(["last_source_batch", "k"]):
+        best = candidates.sort_values(["mean_total_ev_fraction", "candidate_order"], ascending=[False, True]).iloc[0]
+        chosen = selection[(selection.last_source_batch == split) & (selection.k == rank)].iloc[0]
+        if best.two_e_lambda != chosen.selected_two_e_lambda:
+            failures.append(f"Gas selection maximum/tie order differs at s={split}, k={rank}.")
+    counts = pd.read_csv(output / "design_bank/design_summary.csv")
+    if len(counts) != 600 or set(zip(counts.g, counts.p, counts.k, counts.m)) != {(5, 10, 5, 2), (5, 8, 5, 1), (2, 8, 5, 2)}:
+        failures.append("Recovery bank must contain 100 draws for each of the six paper settings.")
+    fama = output / MANIFEST["result_groups"]["fama_french"]
+    folds = pd.read_csv(fama / "penalty_validation_folds.csv")
+    summary = pd.read_csv(fama / "penalty_validation_summary.csv")
+    keys = ["k", "candidate_order", "two_e_lambda"]
+    means = folds.groupby(keys, dropna=False)["heldout_total_ev_fraction"].mean().reset_index()
+    merged = summary.merge(means, on=keys, validate="one_to_one")
+    if len(merged) != 9 * 9 or not np.allclose(merged.mean_total_ev_fraction, merged.heldout_total_ev_fraction, rtol=0, atol=1e-12):
+        failures.append("Fama validation summaries do not match equal-fold mean EV fractions.")
+    for rank, candidates in summary.groupby("k"):
+        best = candidates.sort_values(["mean_total_ev_fraction", "candidate_order"], ascending=[False, True]).iloc[0]
+        chosen = candidates[candidates.selected == 1]
+        if len(chosen) != 1 or chosen.iloc[0].candidate_order != best.candidate_order:
+            failures.append(f"Fama selection maximum/tie order differs at k={rank}.")
+    periods = pd.read_csv(fama / "period_counts.csv")
+    if list(periods.start_year) != list(range(1970, 2025, 5)) or list(periods.end_year) != list(range(1974, 2025, 5)):
+        failures.append("Fama periods must cover the paper's five-year blocks from 1970 to 2024.")
+    fits = pd.read_csv(output / MANIFEST["result_groups"]["gas_sensor"] / "classification/fit_checks.csv")
+    if len(fits) != 7 or not fits.converged.eq(1).all():
+        failures.append("All seven selected classification fits must converge.")
+    report = {"status": "failed" if failures else "passed", "failures": failures,
+              "fama_input_matches_reference": same_fama_data,
+              "revised_fama_data_differences": revised_data,
+              "figures": len(MANIFEST["figures"]), "tables": len(MANIFEST["tables"])}
+    (output / "verification.json").write_text(json.dumps(report, indent=2) + "\n")
+    if failures:
+        raise RuntimeError("\n".join(failures))
+    print("Checked 11 figures, 8 tables, and the numerical reference results.")
+    if not same_fama_data:
+        print("Fama–French inputs differ from the paper vintage; differences are recorded in verification.json.")
+    return report
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", type=Path, required=True)
+    check(parser.parse_args().output_dir)

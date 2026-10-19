@@ -1,48 +1,32 @@
-# Existing Assets and Licenses
+# Data and licenses
 
-This file records the external assets used by the Anchor PCA reproduction code.
+This repository's original code is licensed under [MIT](LICENSE). Raw datasets
+are not distributed.
 
-## Code in This Repository
+## Gas-sensor drift data
 
-- Asset: `anchorpca` package and experiment scripts.
-- License: MIT, see `LICENSE`.
-- Generated synthetic designs and figures are reproducible outputs created by the
-  scripts and are not separately released as a new dataset.
+The scripts download the [Gas Sensor Array Drift Dataset at Different
+Concentrations](https://doi.org/10.24432/C5MK6M) from UCI and verify the archive
+checksum. UCI lists the dataset under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); see the linked dataset
+page for the provider's terms and requested citations, including Vergara et al.
+(2012) and Rodríguez-Luján et al. (2014).
 
-## UCI Gas Sensor Dataset
+## Fama–French industry portfolios
 
-- Asset: Gas Sensor Array Drift Dataset at Different Concentrations.
-- Source: UCI Machine Learning Repository, https://doi.org/10.24432/C5MK6M.
-- DOI: `10.24432/C5MK6M`.
-- License: CC BY 4.0.
-- Use in this repository: downloaded by
-  `experiments/real_world/gas_sensor/compute_rolling_split_explained_variance.py`
-  if not present locally; the script verifies SHA256
-  `98fe3a30981a222dd4518fbcc3dddd45d5c0ce9b03ef6dc6fe5cf7a04cfbff5e`.
-- Data type: sensor measurements; no human-subject records are used.
-- Redistribution: the code downloads from the original source instead of storing
-  a copy of the dataset in this repository.
+The scripts download [49 Industry Portfolios, daily value-weighted returns](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/Data_Library.html)
+from the Kenneth R. French Data Library, Tuck School of Business at Dartmouth
+College. We use 1970–2024; the paper used the May 2026 CRSP revision, accessed
+July 26, 2026. The library reconstructs the history when updating its data, so
+historical returns may change. A supplied original archive can be used instead
+of a fresh download. The scripts record the revision and input hashes.
 
-## External `minPCA` Package
+Data remain subject to the source's terms and are not covered by this
+repository's MIT license.
 
-- Asset: external `minPCA` implementation used for wcPCA/`norm-maxRegret`
-  baselines.
-- Source: `https://github.com/anyafries/minPCA`, pinned at commit
-  `9b90ebd0b56fc8eb88a7217e38c49b35a6927f82`.
-- License observed from installed package metadata: GNU Affero General Public
-  License v3.0.
-- Use in this repository: optional external dependency for the perturbation-path
-  wcPCA baselines and the gas-sensor `norm-maxRegret` baseline. The package is
-  not vendored and no cached baseline outputs are used.
+## minPCA baseline
 
-## Principal Python Dependencies
-
-The tested reproduction environment is pinned in `requirements-repro.txt`. The
-main Python packages used directly by the repository are:
-
-- `numpy`
-- `scipy`
-- `pandas`
-- `matplotlib`
-- `pytest`
-- `torch` through the external `minPCA` dependency
+The wcPCA baselines use [minPCA](https://github.com/anyafries/minPCA), pinned to
+commit `9b90ebd0b56fc8eb88a7217e38c49b35a6927f82` in
+`requirements-repro.txt`. That package is licensed under AGPL-3.0 and is installed
+as an external dependency; its source is not included here.

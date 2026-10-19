@@ -1,9 +1,4 @@
-"""Run FindS_star comparisons for paper S_star recovery figures.
-
-This script complements ``run_infty_sstar_recovery.py`` for selected paper
-figures. It reuses the same distribution draws, sample-size grid, and sampling
-seed convention, and adds the FindS_star estimate of ``m = dim(S*)``.
-"""
+"""Run Anchor PCA and FindS_star recovery on the three standard paper settings."""
 
 from __future__ import annotations
 
@@ -25,7 +20,7 @@ from run_g2_low_environment_stress import (  # noqa: E402
     sequential_test_metrics,
     summarize_seqtest_results,
 )
-from run_infty_sstar_recovery import (  # noqa: E402
+from recovery_utils import (  # noqa: E402
     config_metadata,
     empirical_run_metrics_and_model,
     load_config_arrays,
@@ -46,9 +41,7 @@ DEFAULT_PROFILES = ("balanced", "threshold_stress")
 DEFAULT_SAMPLE_REPS = 20
 DEFAULT_ALPHA = 0.05
 DEFAULT_MEAN_SCALE = 0.75
-DEFAULT_W_LOW = 0.5
-DEFAULT_W_HIGH = 2.0
-VALID_DISTRIBUTIONS = ("gaussian", "gaussian_mixture", "scale_mixture")
+VALID_DISTRIBUTIONS = ("gaussian", "gaussian_mixture")
 DEFAULT_TARGETS = (
     "gaussian:g5_p10_k5_m2",
     "gaussian_mixture:g5_p10_k5_m2",
@@ -92,8 +85,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--alpha", type=float, default=DEFAULT_ALPHA)
     parser.add_argument("--mean-scale", type=float, default=DEFAULT_MEAN_SCALE)
-    parser.add_argument("--w-low", type=float, default=DEFAULT_W_LOW)
-    parser.add_argument("--w-high", type=float, default=DEFAULT_W_HIGH)
     parser.add_argument(
         "--max-designs",
         type=int,
@@ -162,8 +153,6 @@ def write_metadata(
         "sample_reps": int(args.sample_reps),
         "alpha": float(args.alpha),
         "mean_scale": float(args.mean_scale),
-        "w_low": float(args.w_low),
-        "w_high": float(args.w_high),
         "max_designs": args.max_designs,
         "findsstar_assume_gaussian": True,
         "raw_rows": int(raw_rows),
@@ -236,8 +225,6 @@ def main() -> None:
                         n_obs=int(n_obs),
                         distribution=distribution,
                         mean_scale=float(args.mean_scale),
-                        w_low=float(args.w_low),
-                        w_high=float(args.w_high),
                     )
                     anchor_metrics, model = empirical_run_metrics_and_model(
                         X_envs=X_envs,

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 
 GAS_SENSOR_DIR = (
@@ -16,11 +17,10 @@ GAS_SENSOR_DIR = (
 sys.path.insert(0, str(GAS_SENSOR_DIR))
 
 import compute_rolling_split_explained_variance as compute  # noqa: E402
-import plot_loading_diagnostics as loading_plot  # noqa: E402
 import plot_rolling_split_summary as rolling_plot  # noqa: E402
 import plot_source_target_EV as source_plot  # noqa: E402
 import plot_sstar_poolpca_target_batches as sstar_target_plot  # noqa: E402
-import plot_sstar_poolpca_tradeoff as sstar_tradeoff  # noqa: E402
+import same_dim_utils as sstar_tradeoff  # noqa: E402
 
 
 def synthetic_metadata(n_batches=10, n_per_batch=4):
@@ -94,7 +94,6 @@ def test_gas_composition_plot_and_csv_are_written(tmp_path):
         results_dir=tmp_path,
     )
 
-    assert (tmp_path / "gas_sensor_class_composition_by_batch.png").exists()
     assert (tmp_path / "gas_sensor_class_composition_by_batch.pdf").exists()
     assert (tmp_path / "gas_sensor_class_composition_by_batch.csv").exists()
     assert int(composition["n_obs"].sum()) == 13_910
@@ -197,7 +196,7 @@ def make_mock_explained_variance_csv():
     rows = []
     methods = (
         "poolPCA",
-        "AnchorPCA_lambda=1",
+        "source_selected_Anchor_PCA",
         "AnchorPCA_infty",
         "norm-maxRegret",
     )
@@ -207,7 +206,7 @@ def make_mock_explained_variance_csv():
                 split = "source" if batch <= s else "target"
                 for method in methods:
                     value = 50.0 + batch + 0.1 * k
-                    if method == "AnchorPCA_lambda=1":
+                    if method == "source_selected_Anchor_PCA":
                         value += 1.0
                     if method == "AnchorPCA_infty":
                         value += 5.0
@@ -305,7 +304,6 @@ def test_source_target_plot_writes_figure_from_selected_csv_values(tmp_path):
         target_spacing_scale=1.0,
     )
 
-    assert (tmp_path / "mock_source_target.png").exists()
     assert (tmp_path / "mock_source_target.pdf").exists()
     assert improvement == source_plot.compute_anchor_infty_target_improvement(rows)
 
@@ -326,13 +324,13 @@ def make_mock_rolling_explained_variance_csv():
     rows = []
     methods = (
         "poolPCA",
-        "AnchorPCA_lambda=1",
+        "source_selected_Anchor_PCA",
         "AnchorPCA_infty",
         "AnchorPCA_lambda=10",
     )
     method_offsets = {
         "poolPCA": 0.0,
-        "AnchorPCA_lambda=1": 1.0,
+        "source_selected_Anchor_PCA": 1.0,
         "AnchorPCA_infty": 2.0,
         "AnchorPCA_lambda=10": 3.0,
     }
@@ -356,6 +354,7 @@ def make_mock_rolling_explained_variance_csv():
                                 + 0.1 * batch
                                 + method_offsets[method]
                             ),
+                            "selected_two_e_lambda": np.inf if s == 3 else 10.0,
                         }
                     )
     return pd.DataFrame(rows)
@@ -373,7 +372,7 @@ def test_rolling_plot_filters_exclude_s9_k5_k40_and_anchor_lambda_10():
     assert "AnchorPCA_lambda=10" not in set(plot_rows["method_id"])
     assert set(plot_rows["method_id"]) == {
         "poolPCA",
-        "AnchorPCA_lambda=1",
+        "source_selected_Anchor_PCA",
         "AnchorPCA_infty",
     }
 
@@ -412,8 +411,35 @@ def test_rolling_summary_plot_writes_figure_from_selected_csv_values(tmp_path):
         stem="mock_rolling_summary",
     )
 
-    assert (tmp_path / "mock_rolling_summary.png").exists()
     assert (tmp_path / "mock_rolling_summary.pdf").exists()
+
+
+def test_combining_plot_csvs_preserves_rows_and_rejects_inconsistent_baselines():
+    all_rows = make_mock_explained_variance_csv()
+    base = all_rows[all_rows.method_id != source_plot.SELECTED_METHOD].copy()
+    selected = all_rows[all_rows.method_id != "norm-maxRegret"].copy()
+    selected["selected_two_e_lambda"] = 10.0
+    combined = source_plot.combine_plot_rows(base, selected)
+    result = source_plot.select_source_target_rows(combined, last_source_batch=6, k=20)
+    assert len(result) == 40
+    assert result[result.method_id == source_plot.SELECTED_METHOD].selected_two_e_lambda.eq(10).all()
+    selected.loc[selected.method_id == "poolPCA", "percent_explained_variance"] += 1
+    with pytest.raises(ValueError, match="disagree"):
+        source_plot.combine_plot_rows(base, selected)
+
+
+def test_rolling_penalty_strip_uses_one_source_selected_value_per_setting():
+    rows = make_mock_rolling_explained_variance_csv()
+    summary = rolling_plot.select_rolling_plot_data(rows)
+    assert summary[summary.last_source_batch == 3].selected_two_e_lambda.eq(np.inf).all()
+    assert summary[summary.last_source_batch > 3].selected_two_e_lambda.eq(10).all()
+    selected_index = rows.index[(rows.method_id == source_plot.SELECTED_METHOD) & (rows.k == 10)][0]
+    rows.loc[selected_index, "selected_two_e_lambda"] = 0.0
+    with pytest.raises(ValueError, match="exactly one"):
+        rolling_plot.select_rolling_plot_data(rows)
+    assert [rolling_plot.format_penalty(v) for v in [0, 0.1, 1, 1000, np.inf]] == [
+        "$0$", "$10^{-1}$", "$1$", "$10^{3}$", r"$\infty$"
+    ]
 
 
 def make_mock_sstar_and_pool_same_dim_rows():
@@ -451,41 +477,6 @@ def make_mock_sstar_and_pool_same_dim_rows():
                     }
                 )
     return pd.DataFrame(sstar_rows), pd.DataFrame(pool_rows)
-
-
-def test_sstar_tradeoff_summary_uses_same_dimension_batch_values():
-    sstar_rows, pool_rows = make_mock_sstar_and_pool_same_dim_rows()
-
-    selected = sstar_tradeoff.select_sstar_rows(
-        sstar_rows,
-        k_values=(10, 20),
-        last_source_batches=(3, 4),
-    )
-    batch_table = sstar_tradeoff.build_same_dim_batch_table(selected, pool_rows)
-    summary = sstar_tradeoff.build_tradeoff_summary(batch_table)
-
-    assert len(batch_table) == 2 * 2 * 10
-    assert len(summary) == 2 * 2
-    assert set(summary["invariant_n_selected"]) == {3, 5}
-    assert np.allclose(summary["source_difference_pp"], -4.0)
-    assert np.allclose(summary["target_difference_pp"], 6.0)
-    assert (summary["n_target_wins"] == summary["n_target_batches"]).all()
-
-
-def test_sstar_tradeoff_plot_writes_figure_from_summary_values(tmp_path):
-    sstar_rows, pool_rows = make_mock_sstar_and_pool_same_dim_rows()
-    selected = sstar_tradeoff.select_sstar_rows(
-        sstar_rows,
-        k_values=(10, 20),
-        last_source_batches=(3, 4),
-    )
-    batch_table = sstar_tradeoff.build_same_dim_batch_table(selected, pool_rows)
-    summary = sstar_tradeoff.build_tradeoff_summary(batch_table)
-
-    sstar_tradeoff.plot_tradeoff(summary, tmp_path, stem="mock_sstar_tradeoff")
-
-    assert (tmp_path / "mock_sstar_tradeoff.png").exists()
-    assert (tmp_path / "mock_sstar_tradeoff.pdf").exists()
 
 
 def test_sstar_target_batch_plot_extracts_b9_b10_same_dim_values():
@@ -549,69 +540,4 @@ def test_sstar_target_batch_plot_writes_figure_from_selected_values(tmp_path):
         stem="mock_sstar_b9_b10",
     )
 
-    assert (tmp_path / "mock_sstar_b9_b10.png").exists()
     assert (tmp_path / "mock_sstar_b9_b10.pdf").exists()
-
-
-def test_loading_diagnostic_leverage_tables_are_normalized():
-    feature_table = loading_plot.feature_index_table()
-    rng = np.random.default_rng(123)
-    q, _ = np.linalg.qr(rng.normal(size=(compute.N_FEATURES, 4)))
-
-    heatmap = loading_plot.direction_feature_type_leverage(
-        q,
-        method_id="mock",
-        top_directions=3,
-        feature_table=feature_table,
-    )
-    sensor = loading_plot.subspace_sensor_importance(
-        q,
-        method_id="mock",
-        feature_table=feature_table,
-    )
-    feature_type = loading_plot.subspace_feature_type_importance(
-        q,
-        method_id="mock",
-        feature_table=feature_table,
-    )
-
-    by_direction = heatmap.groupby("direction")["leverage_percent"].sum()
-    assert np.allclose(by_direction.to_numpy(), np.full(3, 100.0))
-    assert np.isclose(sensor["importance_percent"].sum(), 100.0)
-    assert np.isclose(feature_type["importance_percent"].sum(), 100.0)
-    assert set(sensor["sensor"]) == set(range(1, 17))
-    assert set(feature_type["feature_type"]) == set(loading_plot.FEATURE_TYPES)
-
-
-def test_loading_diagnostic_plots_write_figures(tmp_path):
-    feature_table = loading_plot.feature_index_table()
-    q_pool = np.eye(compute.N_FEATURES, 4)
-    q_anchor = np.roll(q_pool, shift=1, axis=0)
-    fitted = {
-        "poolPCA": {"directions": q_pool},
-        "AnchorPCA_infty": {"directions": q_anchor},
-    }
-    heatmap, sensor, feature_type = loading_plot.build_diagnostic_tables(
-        fitted,
-        k=4,
-        top_directions=3,
-        feature_table=feature_table,
-    )
-
-    loading_plot.plot_top_direction_feature_heatmaps(
-        heatmap,
-        tmp_path,
-        stem="mock_loading_heatmap",
-        m_hat=2,
-    )
-    loading_plot.plot_importance_summaries(
-        sensor,
-        feature_type,
-        tmp_path,
-        stem="mock_loading_importance",
-    )
-
-    assert (tmp_path / "mock_loading_heatmap.png").exists()
-    assert (tmp_path / "mock_loading_heatmap.pdf").exists()
-    assert (tmp_path / "mock_loading_importance.png").exists()
-    assert (tmp_path / "mock_loading_importance.pdf").exists()

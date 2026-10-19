@@ -28,7 +28,7 @@ import pandas as pd
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from run_infty_sstar_recovery import (  # noqa: E402
+from recovery_utils import (  # noqa: E402
     config_metadata,
     empirical_run_metrics_and_model,
     eig_desc,
@@ -361,8 +361,6 @@ def main() -> None:
                         n_obs=int(n_obs),
                         distribution="gaussian",
                         mean_scale=0.0,
-                        w_low=0.5,
-                        w_high=2.0,
                     )
                     anchor_metrics, model = empirical_run_metrics_and_model(
                         X_envs=X_envs,

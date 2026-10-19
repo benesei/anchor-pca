@@ -1,0 +1,7 @@
+method_id,method_label,intercept_rho0,slope,rho_design,fit_source,package_function,package_norm,wc_objective_value
+poolPCA,poolPCA,93.33333333333337,1.0000000000000002,,anchorpca,,,
+maxRCS,maxRCS,93.73339611516849,0.9342365429335996,,minPCA,maxrcs,False,105.45903971957493
+maxRegret,maxRegret,93.95482142964575,0.9009174275269972,,minPCA,maxregret,False,88.20498428295267
+norm-maxRegret,norm-maxRegret,93.92622417905586,0.9028666245386313,,minPCA,maxregret,True,0.18288354300778853
+AnchorPCA_lambda=25,AnchorPCA$_{\lambda = 25}$,98.5348049081674,0.4322216125216789,150.0,anchorpca,,,
+AnchorPCA_infty,AnchorPCA$_{\infty}$,113.78205495363333,0.39121605922231034,,anchorpca,,,

@@ -1,14 +1,4 @@
-"""Plot publication figures for random-subspace S_star recovery simulations.
-
-The standard figures read outputs from ``run_infty_sstar_recovery.py``. If
-matching FindS_star outputs from ``run_main_seqtest_dimension.py`` exist, the
-corresponding recovery figures overlay the FindS_star dimension and subspace
-recovery curves. If the small-E stress output from
-``run_g2_low_environment_stress.py`` exists, the script also writes the combined
-Gaussian extended-N recovery/tolerance figure for the hard ``E=2, p=8, k=5,
-m=2`` configuration. The hard recovery panels use the same FindS_star overlay
-style.
-"""
+"""Plot the four paper figures from joint Anchor PCA and FindS_star recovery summaries."""
 
 from __future__ import annotations
 
@@ -41,12 +31,10 @@ PROFILE_COLORS = {
 DISTRIBUTION_LABELS = {
     "gaussian": "Gaussian",
     "gaussian_mixture": "Gaussian mixture",
-    "scale_mixture": "scale mixture",
 }
 DISTRIBUTION_LINESTYLES = {
     "gaussian": "-",
     "gaussian_mixture": "--",
-    "scale_mixture": ":",
 }
 METHOD_MARKERS = {
     "anchorpca": "o",
@@ -66,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--results-dir",
         type=Path,
-        default=script_dir / "results" / "infty_sstar_recovery",
+        default=script_dir / "results" / "infty_sstar_recovery_main_seqtest",
     )
     parser.add_argument(
         "--figures-dir",
@@ -135,7 +123,7 @@ def configure_publication_style() -> None:
         {
             "text.usetex": False,
             "font.family": "serif",
-            "font.serif": ["Palatino", "DejaVu Serif"],
+            "font.serif": ["Palatino", "TeX Gyre Pagella", "DejaVu Serif"],
             "mathtext.fontset": "cm",
             "font.size": 8,
             "axes.labelsize": 9,
@@ -159,7 +147,6 @@ def configure_publication_style() -> None:
 
 def save_figure(fig, figures_dir: Path, stem: str) -> None:
     figures_dir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(figures_dir / f"{stem}.png", dpi=600, bbox_inches="tight")
     fig.savefig(figures_dir / f"{stem}.pdf", bbox_inches="tight")
 
 
@@ -168,9 +155,7 @@ def read_summaries(results_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     design_path = results_dir / "summary_by_design.csv"
     if not curve_path.exists():
         raise FileNotFoundError(f"Missing curve summary: {curve_path}")
-    if not design_path.exists():
-        raise FileNotFoundError(f"Missing design summary: {design_path}")
-    return pd.read_csv(curve_path), pd.read_csv(design_path)
+    return pd.read_csv(curve_path), pd.read_csv(design_path) if design_path.exists() else pd.DataFrame()
 
 
 def base_config_label(row: pd.Series) -> str:
@@ -785,102 +770,6 @@ def plot_small_e_recovery_tolerance_four_panel(
     fig.subplots_adjust(left=0.08, right=0.99, bottom=0.10, top=0.95)
     return fig
 
-def plot_tolerance_mechanism(summary: pd.DataFrame) -> plt.Figure:
-    fig, ax = plt.subplots(figsize=(4.9, 2.65))
-    _plot_tolerance_mechanism_axis(ax, summary, short_labels=False)
-    ax.legend(
-        frameon=False,
-        ncol=1,
-        fontsize=7.2,
-        handlelength=2.4,
-        loc="upper left",
-        bbox_to_anchor=(1.02, 1.0),
-        borderaxespad=0.0,
-    )
-    fig.tight_layout()
-    return fig
-
-
-def plot_tolerance_mechanism_comparison(
-    main_summary: pd.DataFrame,
-    stress_summary: pd.DataFrame,
-) -> plt.Figure:
-    fig, axes = plt.subplots(1, 2, figsize=(7.05, 2.55), sharey=False)
-    panel_specs = [
-        (axes[0], main_summary, "Main random-subspace design"),
-        (axes[1], stress_summary, r"Small-$E$ stress design"),
-    ]
-    for ax, rows, title in panel_specs:
-        _plot_tolerance_mechanism_axis(ax, rows, short_labels=True)
-        ax.set_title(title)
-    axes[1].set_ylabel("")
-
-    handles, labels = axes[0].get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    ordered_labels = ["block tolerance", "easy", "hard"]
-    fig.legend(
-        [by_label[label] for label in ordered_labels if label in by_label],
-        [label for label in ordered_labels if label in by_label],
-        loc="upper center",
-        bbox_to_anchor=(0.5, 1.06),
-        ncol=3,
-        frameon=False,
-        handlelength=2.4,
-        columnspacing=1.4,
-    )
-    fig.tight_layout(w_pad=1.6)
-    fig.subplots_adjust(top=0.78)
-    return fig
-
-
-def plot_agreement_gap_scatter(design_summary: pd.DataFrame) -> plt.Figure:
-    fig, axes = plt.subplots(1, 2, figsize=(6.8, 2.65))
-    final_n = int(design_summary["N"].max())
-    rows = design_summary[design_summary["N"] == final_n].copy()
-    if "agreement_gap" not in rows.columns:
-        axes[0].text(0.5, 0.5, "agreement_gap unavailable", ha="center", va="center")
-        axes[1].text(0.5, 0.5, "agreement_gap unavailable", ha="center", va="center")
-        return fig
-
-    for (profile, distribution), group in rows.groupby(["profile", "distribution"], sort=False):
-        color = PROFILE_COLORS.get(profile, "0.25")
-        marker = "o" if distribution == "gaussian" else "s"
-        label = f"{PROFILE_LABELS.get(profile, profile)}, {DISTRIBUTION_LABELS.get(distribution, distribution)}"
-        axes[0].scatter(
-            group["agreement_gap"],
-            group["dim_correct_mean"],
-            s=18,
-            color=color,
-            marker=marker,
-            alpha=0.70,
-            edgecolor="white",
-            linewidth=0.5,
-            label=label,
-        )
-        axes[1].scatter(
-            group["agreement_gap"],
-            group["first_block_projector_error_op_median"],
-            s=18,
-            color=color,
-            marker=marker,
-            alpha=0.70,
-            edgecolor="white",
-            linewidth=0.5,
-            label=label,
-        )
-
-    axes[0].set_ylabel(r"$\Pr(\widehat m_\infty=m)$")
-    axes[1].set_ylabel(r"median subspace error")
-    for ax in axes:
-        ax.set_xlabel(r"$1-\lambda_{m+1}(\bar\Pi)$")
-        ax.grid(False)
-    axes[0].set_title(f"Dimension recovery at N={final_n}")
-    axes[1].set_title(f"Subspace error at N={final_n}")
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 1.08), ncol=2, frameon=False)
-    fig.tight_layout(w_pad=1.4)
-    return fig
-
 
 def config_stem(rows: pd.DataFrame) -> str:
     first = rows.iloc[0]
@@ -956,7 +845,7 @@ def main() -> None:
             rows,
             seqtest_summary=seqtest_rows,
             show_bands=not bool(args.no_bands),
-            figsize=(7.05, 2.28) if has_seqtest_overlay else None,
+            figsize=(7.05, 2.1 if base_config == DEFAULT_MAIN_CONFIG and distribution == "gaussian" else 2.28) if has_seqtest_overlay else None,
             overlay_panel_gap=0.34 if has_seqtest_overlay else None,
             overlay_legend_gap=0.03 if has_seqtest_overlay else None,
             overlay_legend_width=0.72 if has_seqtest_overlay else None,
@@ -964,6 +853,22 @@ def main() -> None:
             tick_labelsize=8.8 if has_seqtest_overlay else None,
             legend_fontsize=9.5 if has_seqtest_overlay else None,
         )
+        if base_config == DEFAULT_MAIN_CONFIG and distribution == "gaussian":
+            from matplotlib.lines import Line2D
+            legend_ax = fig.axes[2]
+            for artist in list(legend_ax.artists):
+                artist.remove()
+            if legend_ax.get_legend() is not None:
+                legend_ax.get_legend().remove()
+            handles = [Line2D([], [], color=".2", ls=ls, marker=marker,
+                              mec="white", lw=1.8)
+                       for ls, marker in [("-", "o"), ("--", "s")]]
+            handles += [Line2D([], [], color=color, lw=2)
+                        for color in ["tab:blue", "#D62728"]]
+            legend_ax.legend(handles, [r"AnchorPCA$_\infty$", r"$\mathtt{FindS}_\star$", "easy", "hard"],
+                             loc="center left", frameon=False, fontsize=9,
+                             handlelength=2, borderaxespad=0, labelspacing=.6)
+            fig.subplots_adjust(left=.08, right=.99, bottom=.47/2.1, top=1-.26/2.1)
         stem = figure_stem_for(rows, distribution)
         save_figure(fig, figures_dir, stem)
         plt.close(fig)

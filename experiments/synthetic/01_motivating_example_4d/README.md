@@ -1,25 +1,12 @@
-# Four-Dimensional Motivating Example
+# Four-dimensional motivating example
 
-Runtime category: quick.
-
-This folder reproduces the population motivating example from the paper. The
-script is deterministic and uses only the covariance matrices defined in the
-paper.
-
-Run from the repository root:
+Figure 1 and reconstruction errors are computed directly from the three
+population covariance matrices in Table 1; no sampling is involved.
 
 ```bash
-python experiments/synthetic/01_motivating_example_4d/run_motivating_example.py
+python experiments/synthetic/01_motivating_example_4d/run_motivating_example.py \
+  --output-dir outputs/motivating
 ```
 
-The script fits `poolPCA`, `AnchorPCALambda(lambda_=25)`, and
-`AnchorPCAInfty`. Outputs used directly in the paper:
-
-- `figures/4d_motivation_exp_quotient_view.(png|pdf)`
-- `results/paper_table_check.json`
-
-`results/paper_table_check.json` records the rounded reconstruction-error
-values used in the paper table and is checked by the script. The script also
-writes diagnostic nuisance-plane and loading plots, plus full metric CSVs, but
-those diagnostics are not included in the current paper. There are no random
-seeds in this population example.
+This produces Figure 1 and the reconstruction-error CSV. The script verifies
+Table 1's reconstruction values at the reported precision.

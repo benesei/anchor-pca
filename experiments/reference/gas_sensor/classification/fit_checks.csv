@@ -1,0 +1,8 @@
+method_id,representation_dimension,directions_orthonormal,converged,n_iter,optimizer_success,gradient_norm,constraint_violation
+Anchor_PCA_infinity_l2,20,1.0,1,20,,,
+linear_GroupDRO,128,,1,305,1.0,6.055936728580779e-07,4.952618870568415e-11
+linear_VREx,128,,1,353,1.0,9.612642193457363e-07,0.0
+poolPCA_l2,20,1.0,1,124,,,
+source_selected_Anchor_PCA_l2,20,1.0,1,39,,,
+unreduced_l1,128,,1,4508,,,
+unreduced_l2,128,,1,112,,,

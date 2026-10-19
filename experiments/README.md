@@ -1,87 +1,72 @@
-# Experiments
+# Paper experiments
 
-This directory is the main entry point for reproducing the results and plots in
-the paper "Anchor PCA". Run commands from the repository root. Generated
-`data/`, `results/`, and `figures/` directories are ignored by git.
-
-Install the package and dependencies from the repository root as described in
-`../README.md`. Existing data/code assets and licenses are summarized in
-`../ASSETS.md`.
-
-## Paper-to-Code Map
-
-The following list contains only outputs used in the current paper. Some scripts
-generate extra diagnostics; those are documented in the subfolder READMEs.
-
-- **Motivating example.**
-  - Script: `synthetic/01_motivating_example_4d/run_motivating_example.py`
-  - Outputs: `synthetic/01_motivating_example_4d/figures/4d_motivation_exp_quotient_view.pdf`,
-    `synthetic/01_motivating_example_4d/results/paper_table_check.json`
-
-- **Optimal reconstruction under perturbations.**
-  - Script: `synthetic/02_perturbation_path/run_perturbation_path.py`
-  - Output: `synthetic/02_perturbation_path/figures/perturbation_path.pdf`
-
-- **Recovering `S_star` in random-subspace simulations.**
-  - Folder: `synthetic/03_random_subspace_sstar/`
-  - Scripts: `generate_design_bank.py`, `run_infty_sstar_recovery.py`,
-    `run_main_seqtest_dimension.py`, `plot_infty_sstar_recovery.py`
-  - Main output: `figures/infty_sstar_recovery_gaussian_g5_p10_k5_m2_main.pdf`
-  - Appendix outputs: `figures/infty_sstar_recovery_gaussian_mixture_g5_p10_k5_m2_main.pdf`,
-    `figures/infty_sstar_recovery_gaussian_g5_p8_k5_m1.pdf`,
-    `figures/infty_sstar_recovery_g2_p8_k5_m2_combined_extended_n100000.pdf`
-
-- **Gas-sensor drift experiment.**
-  - Folder: `real_world/gas_sensor/`
-  - Scripts: `compute_rolling_split_explained_variance.py`,
-    `plot_source_target_EV.py`, `plot_rolling_split_summary.py`,
-    `plot_sstar_poolpca_target_batches.py`
-  - Main output: `figures/gas_sensor_publication_b1_b6_source_target_k20.pdf`
-  - Appendix outputs: `figures/gas_sensor_class_composition_by_batch.pdf`,
-    `figures/rolling_publication_target_ev_combined.pdf`,
-    `figures/sstar_poolpca_same_dim_b9_b10_ev.pdf`
-
-## Smoke Commands
-
-These commands check the full pipeline structure with small synthetic runs.
-They do not regenerate the full paper-quality Monte Carlo results.
+Run commands from the repository root after installing the dependencies in the
+[main README](../README.md). The runner reproduces every numbered figure and
+table, including the appendix.
 
 ```bash
-python experiments/synthetic/01_motivating_example_4d/run_motivating_example.py
-python experiments/synthetic/02_perturbation_path/run_perturbation_path.py --wc-source grid
-python experiments/synthetic/03_random_subspace_sstar/generate_design_bank.py --n-draws-per-config 2 --overwrite
-python experiments/synthetic/03_random_subspace_sstar/run_infty_sstar_recovery.py --max-designs 2 --sample-reps 2 --n-grid 50 100 --overwrite
-python experiments/synthetic/03_random_subspace_sstar/run_main_seqtest_dimension.py --max-designs 2 --sample-reps 2 --n-grid 50 100 --overwrite
-python experiments/synthetic/03_random_subspace_sstar/run_g2_low_environment_stress.py --max-designs 2 --sample-reps 2 --n-grid 50 100 --overwrite
-python experiments/synthetic/03_random_subspace_sstar/plot_infty_sstar_recovery.py
+python experiments/reproduce.py --from-reference --output-dir outputs/reference
+python experiments/reproduce.py --recompute --output-dir outputs/recomputed
 ```
 
-Gas-sensor smoke run:
+The first command uses the compact CSV/JSON files in `reference/` and requires
+no data download. The second reruns the complete experiments with the paper's
+seeds and sample counts. Each output directory must be empty initially.
+Figures are written to `figures/`, table summaries to `tables/`, and computation
+outputs to their experiment subdirectories. `verification.json` records the
+comparison with the paper results; `reproduction.log` contains execution details.
+
+## Paper-to-code map
+
+Paths below are relative to `experiments/`. The exact output names are listed in
+[paper_outputs.json](paper_outputs.json).
+
+| Figure | Content | Code |
+| --- | --- | --- |
+| 1 | Four-dimensional motivating example | `synthetic/01_motivating_example_4d/run_motivating_example.py` |
+| 2 | Covariance perturbation path | `synthetic/02_perturbation_path/run_perturbation_path.py`, `plot_perturbation_path.py` |
+| 3, 5, 6 | Gaussian and Gaussian-mixture subspace recovery | `synthetic/03_random_subspace_sstar/run_main_seqtest_dimension.py`, `plot_infty_sstar_recovery.py` |
+| 7 | Small-domain recovery and agreement gaps | `synthetic/03_random_subspace_sstar/run_g2_low_environment_stress.py`, `plot_infty_sstar_recovery.py` |
+| 4 | Gas source/target explained variance | `real_world/gas_sensor/compute_rolling_split_explained_variance.py`, `select_penalty.py`, `plot_source_target_EV.py` |
+| 8 | Gas composition | `real_world/gas_sensor/plot_gas_composition.py` |
+| 9 | Gas rolling source/target splits | `real_world/gas_sensor/plot_rolling_split_summary.py` |
+| 10 | Gas same-dimensional subspace comparison | `real_world/gas_sensor/plot_sstar_poolpca_target_batches.py` |
+| 11 | Fama–French source scree curves | `real_world/fama_french/run_temporal_experiment.py`, `plot_source_scree.py` |
+
+| Table | Content | Computation |
+| --- | --- | --- |
+| 1 | Motivating-example reconstruction errors | `synthetic/01_motivating_example_4d/run_motivating_example.py` |
+| 2 | Independent unseen-domain simulation | `synthetic/03_random_subspace_sstar/run_unseen_target_evaluation.py` |
+| 3 | B9 dominant-direction diagnostic | `real_world/gas_sensor/diagnose_b9_shift.py` |
+| 4 | Gas weighting sensitivity | `real_world/gas_sensor/evaluate_weighting.py` |
+| 5, 6 | Gas classification summary and per-batch accuracy | `real_world/gas_sensor/run_classification.py` |
+| 7, 8 | Fama–French target EV and rank sensitivity | `real_world/fama_french/run_temporal_experiment.py` |
+
+`paper_tables.py` exports these numerical summaries. The design bank also
+reproduces the population agreement-gap summary in the recovery appendix.
+
+## Individual experiments
+
+Each experiment has a short README with its protocol and standalone commands:
+
+- [Motivating example](synthetic/01_motivating_example_4d/README.md)
+- [Perturbation path](synthetic/02_perturbation_path/README.md)
+- [Subspace recovery](synthetic/03_random_subspace_sstar/README.md)
+- [Gas sensor](real_world/gas_sensor/README.md)
+- [Fama–French](real_world/fama_french/README.md)
+
+The scripts accept output paths; use those options to keep large generated
+files outside the repository. Reduced runs are covered by the tests and do not
+replace full paper reproduction.
+
+## Checks
 
 ```bash
-python experiments/real_world/gas_sensor/compute_rolling_split_explained_variance.py \
-  --k-values 10 --last-source-batches 3 --minpca-restarts 1 --minpca-iters 25
-python experiments/real_world/gas_sensor/plot_source_target_EV.py \
-  --k 10 --last-source-batch 3
+python -m pytest
+python experiments/check_reproduction_outputs.py --output-dir outputs/recomputed
 ```
 
-## Reproduction Checks
-
-After a full reproduction run:
-
-```bash
-python experiments/check_reproduction_outputs.py --require-generated
-python -m pytest -q
-```
-
-The output check is non-mutating. It verifies that paper figures and upstream
-CSV/metadata files exist and, when possible, checks the expected configurations,
-grids, easy/hard settings, and row counts.
-
-## Data Notes
-
-The synthetic experiments generate all distribution draws and empirical samples
-from fixed seeds. The gas-sensor experiment downloads the UCI Gas Sensor Array
-Drift Dataset at Different Concentrations from https://doi.org/10.24432/C5MK6M,
-released under CC BY 4.0. The gas data contain sensor measurements, not
-human-subject records.
+The checker covers output completeness, saved numerical results, source-only
+penalty selection, and the paper's configurations. For a revised Fama–French
+download, it records differences separately. See [data and licenses](../ASSETS.md)
+for provenance and the reason historical returns can change.

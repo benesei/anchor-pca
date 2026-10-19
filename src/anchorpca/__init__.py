@@ -10,6 +10,12 @@ from .dimension import (
 )
 from .estimators import AnchorPCAInfty, AnchorPCALambda
 from .metrics import explained_variance
+from .selection import (
+    DEFAULT_TWO_E_LAMBDA_GRID,
+    TwoELambdaSelectionResult,
+    fit_two_e_lambda_from_covariances,
+    select_two_e_lambda_from_covariances,
+)
 
 __all__ = [
     "AnchorPCALambda",
@@ -23,4 +29,8 @@ __all__ = [
     "SStarDimensionTestResult",
     "SStarDimensionWarning",
     "explained_variance",
+    "DEFAULT_TWO_E_LAMBDA_GRID",
+    "TwoELambdaSelectionResult",
+    "fit_two_e_lambda_from_covariances",
+    "select_two_e_lambda_from_covariances",
 ]

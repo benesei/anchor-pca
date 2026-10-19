@@ -24,3 +24,7 @@ data/
 **/figures/
 **/results/
 **/data/
+
+# Paper references are small, versioned numerical outputs.
+!experiments/reference/**
+outputs/

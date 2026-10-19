@@ -26,7 +26,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
-from matplotlib.patches import Circle, Patch
+from matplotlib.patches import Patch
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 
@@ -45,7 +45,6 @@ sys.path.insert(0, str(ROOT / "src"))
 from anchorpca import (  # noqa: E402
     AnchorPCAInfty,
     AnchorPCALambda,
-    explained_variance,
     pool_pca_from_covariances,
 )
 from anchorpca.reproducibility import software_versions  # noqa: E402
@@ -163,43 +162,6 @@ def projector_from_directions(directions: np.ndarray) -> np.ndarray:
     return directions @ directions.T
 
 
-def subspace_capture(directions: np.ndarray, vector: np.ndarray) -> float:
-    return float(np.linalg.norm(directions.T @ vector) ** 2)
-
-
-def nuisance_angle(directions: np.ndarray) -> float:
-    nuisance_part = normalize(directions[:, 2][2:4])
-    angle = float(np.degrees(np.arctan2(nuisance_part[1], nuisance_part[0])))
-    if angle < 0:
-        angle += 180.0
-    return angle
-
-
-def build_metric_rows(
-    methods: dict[str, np.ndarray],
-    covariances: list[np.ndarray],
-    a: np.ndarray,
-    b: np.ndarray,
-) -> list[dict[str, float | str]]:
-    rows: list[dict[str, float | str]] = []
-    for method, directions in methods.items():
-        stats = explained_variance(directions, covariances)
-        rows.append(
-            {
-                "method": method,
-                "domain_1_ev": stats["per_env"][0],
-                "domain_2_ev": stats["per_env"][1],
-                "domain_3_ev": stats["per_env"][2],
-                "average_ev": stats["average"],
-                "worst_case_ev": stats["worst_case"],
-                "capture_a": subspace_capture(directions, a),
-                "capture_b": subspace_capture(directions, b),
-                "third_direction_angle_deg": nuisance_angle(directions),
-            }
-        )
-    return rows
-
-
 def reconstruction_line_parameters(
     projection: np.ndarray,
     covariances: list[np.ndarray],
@@ -266,23 +228,6 @@ def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
         writer.writerows(rows)
 
 
-def write_reconstruction_markdown(path: Path, rows: list[dict[str, float | str]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lines = [
-        "| Method | Original covariances | Perturbed covariances |",
-        "|---|---:|---:|",
-    ]
-    for row in rows:
-        lines.append(
-            "| {method} | {original:.1f} | {perturbed:.1f} |".format(
-                method=row["method"],
-                original=float(row["unperturbed_average_reconstruction_error"]),
-                perturbed=float(row["perturbed_average_reconstruction_error"]),
-            )
-        )
-    path.write_text("\n".join(lines) + "\n")
-
-
 def nuisance_xy(vector4: np.ndarray) -> np.ndarray:
     return normalize(np.asarray(vector4, dtype=float)[2:4])
 
@@ -298,7 +243,6 @@ def save_figure(
     kwargs = {"bbox_inches": "tight"}
     if pad_inches is not None:
         kwargs["pad_inches"] = pad_inches
-    fig.savefig(figures_dir / f"{stem}.png", dpi=dpi, **kwargs)
     fig.savefig(figures_dir / f"{stem}.pdf", **kwargs)
 
 
@@ -430,15 +374,6 @@ def plot_quotient_geometry(
         style_geometry_axes(ax)
         ax.plot([0, 0], [0, 0], [-1.15, 1.15], color=COLORS["invariant"], lw=2.3)
     ax_right.set_zlabel("")
-    ax_right.text2D(
-        0.92,
-        0.51,
-        r"$b$",
-        transform=ax_right.transAxes,
-        fontsize=9,
-        ha="center",
-        va="center",
-    )
 
     label_specs = {
         "u": {"label_radial": 0.08, "label_perp": 0.20, "label_vertical": 0.10},
@@ -592,134 +527,7 @@ def plot_quotient_geometry(
     fig.subplots_adjust(top=0.998, wspace=0.025, left=0.005, right=0.998, bottom=0.00)
     position = ax_left.get_position()
     ax_left.set_position([position.x0 + 0.022, position.y0, position.width, position.height])
-    save_figure(fig, figures_dir, "4d_motivation_exp_quotient_view", pad_inches=0.01, dpi=200)
-    plt.close(fig)
-
-
-def draw_arrow_2d(ax, vector_xy, color, label, offset=(0.02, 0.02), lw=2.4):
-    ax.arrow(
-        0,
-        0,
-        vector_xy[0],
-        vector_xy[1],
-        length_includes_head=True,
-        head_width=0.035,
-        head_length=0.06,
-        linewidth=lw,
-        color=color,
-        zorder=3,
-    )
-    ax.text(
-        vector_xy[0] + offset[0],
-        vector_xy[1] + offset[1],
-        label,
-        color=color,
-        fontsize=12,
-        weight="bold",
-        bbox={
-            "boxstyle": "round,pad=0.25",
-            "facecolor": "white",
-            "edgecolor": color,
-            "linewidth": 1.0,
-            "alpha": 0.85,
-        },
-    )
-
-
-def plot_nuisance_plane(
-    figures_dir: Path,
-    nuisance: dict[str, np.ndarray],
-    methods: dict[str, np.ndarray],
-) -> None:
-    u_xy = nuisance_xy(nuisance["u"])
-    v_xy = nuisance_xy(nuisance["v"])
-    w_xy = nuisance_xy(nuisance["w"])
-    lambda_xy = nuisance_xy(methods["AnchorPCA_lambda=25"][:, 2])
-    infty_xy = nuisance_xy(methods["AnchorPCA_infty"][:, 2])
-
-    fig, ax = plt.subplots(figsize=(7.2, 6.2))
-    ax.add_patch(Circle((0, 0), radius=1.0, edgecolor="#bbbbbb", facecolor="none", lw=1.3))
-    ax.axhline(0, color="#bbbbbb", lw=1.1)
-    ax.axvline(0, color="#bbbbbb", lw=1.1)
-
-    draw_arrow_2d(ax, u_xy, COLORS["u"], r"$u$", offset=(0.03, -0.12))
-    draw_arrow_2d(ax, v_xy, COLORS["v"], r"$v$", offset=(0.04, 0.03))
-    draw_arrow_2d(ax, w_xy, COLORS["w"], r"$w$", offset=(-0.18, 0.04))
-    draw_arrow_2d(
-        ax,
-        lambda_xy,
-        COLORS["lambda"],
-        r"AnchorPCA$_{\lambda=25}$",
-        offset=(-0.28, 0.10),
-        lw=3.0,
-    )
-    draw_arrow_2d(
-        ax,
-        infty_xy,
-        COLORS["infty"],
-        r"AnchorPCA$_{\infty}$",
-        offset=(0.03, -0.12),
-        lw=3.0,
-    )
-    ax.text(
-        -1.16,
-        -1.10,
-        r"poolPCA quotient plane = span$(c_3,c_4)$",
-        color=COLORS["pool"],
-        fontsize=11,
-        bbox={
-            "boxstyle": "round,pad=0.25",
-            "facecolor": "white",
-            "edgecolor": COLORS["pool"],
-            "linewidth": 1.0,
-            "alpha": 0.85,
-        },
-    )
-    ax.set_xlim(-1.2, 1.2)
-    ax.set_ylim(-1.2, 1.2)
-    ax.set_aspect("equal")
-    ax.set_xlabel(r"$c_3$")
-    ax.set_ylabel(r"$c_4$")
-    ax.set_title("Nuisance-plane view", fontsize=18)
-    ax.grid(alpha=0.25)
-    save_figure(fig, figures_dir, "4d_motivation_exp_nuisance_plane")
-    plt.close(fig)
-
-
-def plot_squared_loadings(figures_dir: Path, methods: dict[str, np.ndarray]) -> None:
-    order = ["poolPCA", "AnchorPCA_lambda=25", "AnchorPCA_infty"]
-    titles = {
-        "poolPCA": "poolPCA",
-        "AnchorPCA_lambda=25": r"AnchorPCA$_{\lambda=25}$",
-        "AnchorPCA_infty": r"AnchorPCA$_{\infty}$",
-    }
-    title_colors = {
-        "poolPCA": COLORS["pool"],
-        "AnchorPCA_lambda=25": COLORS["lambda"],
-        "AnchorPCA_infty": COLORS["infty"],
-    }
-    row_labels = [r"$a$", r"$b$", r"$c_3$", r"$c_4$"]
-
-    fig, axes = plt.subplots(1, 3, figsize=(14.5, 4.8), constrained_layout=True)
-    image = None
-    for ax, method in zip(axes, order):
-        loadings = methods[method] ** 2
-        image = ax.imshow(loadings, cmap="Blues", vmin=0.0, vmax=1.0, aspect="auto")
-        ax.set_xticks(range(N_COMPONENTS))
-        ax.set_xticklabels([r"$d_1$", r"$d_2$", r"$d_3$"], fontsize=12)
-        ax.set_yticks(range(4))
-        ax.set_yticklabels(row_labels, fontsize=12)
-        ax.set_title(titles[method], color=title_colors[method], fontsize=18, weight="bold")
-        for i in range(loadings.shape[0]):
-            for j in range(loadings.shape[1]):
-                ax.text(j, i, f"{loadings[i, j]:.2f}", ha="center", va="center", fontsize=11)
-        ax.spines[["top", "right"]].set_visible(False)
-        ax.grid(False)
-
-    assert image is not None
-    colorbar = fig.colorbar(image, ax=axes, fraction=0.025, pad=0.05)
-    colorbar.set_label(r"$|\langle \mathrm{coordinate}, d_j\rangle|^2$", fontsize=12)
-    save_figure(fig, figures_dir, "4d_motivation_exp_loadings")
+    save_figure(fig, figures_dir, "4d_motivation_exp_quotient_view", pad_inches=0.0, dpi=200)
     plt.close(fig)
 
 
@@ -736,26 +544,19 @@ def print_reconstruction_table(rows: list[dict[str, float | str]]) -> None:
         )
 
 
-def run(output_dir: Path, *, include_diagnostics: bool = False) -> None:
-    figures_dir = output_dir / "figures"
+def run(output_dir: Path, *, figures_dir: Path | None = None) -> None:
+    figures_dir = figures_dir or output_dir / "figures"
     results_dir = output_dir / "results"
     model = build_population_model()
-    basis = model["basis"]
     nuisance = model["nuisance"]
     covariances = model["covariances"]
     local_projectors = model["local_projectors"]
 
     methods = fit_methods(covariances)
-    metric_rows = build_metric_rows(methods, covariances, basis["a"], basis["b"])
     reconstruction_rows = build_reconstruction_rows(methods, covariances, local_projectors)
     check_paper_reconstruction_table(reconstruction_rows)
 
-    write_csv(results_dir / "motivating_example_metrics.csv", metric_rows)
     write_csv(results_dir / "motivating_example_reconstruction_errors.csv", reconstruction_rows)
-    write_reconstruction_markdown(
-        results_dir / "motivating_example_reconstruction_errors.md",
-        reconstruction_rows,
-    )
     (results_dir / "paper_table_check.json").write_text(
         json.dumps(
             {
@@ -770,9 +571,6 @@ def run(output_dir: Path, *, include_diagnostics: bool = False) -> None:
     )
 
     plot_quotient_geometry(figures_dir, nuisance, methods)
-    if include_diagnostics:
-        plot_nuisance_plane(figures_dir, nuisance, methods)
-        plot_squared_loadings(figures_dir, methods)
     print_reconstruction_table(reconstruction_rows)
     print(f"\nWrote figures to {figures_dir}")
     print(f"Wrote tables to {results_dir}")
@@ -786,17 +584,13 @@ def parse_args() -> argparse.Namespace:
         default=Path(__file__).resolve().parent,
         help="Directory under which figures/ and results/ are written.",
     )
-    parser.add_argument(
-        "--include-diagnostics",
-        action="store_true",
-        help="Also write auxiliary diagnostic figures not used in the paper.",
-    )
+    parser.add_argument("--figures-dir", type=Path)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    run(args.output_dir.resolve(), include_diagnostics=bool(args.include_diagnostics))
+    run(args.output_dir.resolve(), figures_dir=args.figures_dir)
 
 
 if __name__ == "__main__":

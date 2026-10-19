@@ -15,6 +15,9 @@ DEFAULT_SOFTWARE_PACKAGES = (
     "scipy",
     "pandas",
     "matplotlib",
+    "scikit-learn",
+    "joblib",
+    "threadpoolctl",
     "pytest",
     "torch",
     "minPCA",
@@ -40,7 +43,15 @@ def software_versions(packages: Iterable[str] = DEFAULT_SOFTWARE_PACKAGES) -> di
         "python_implementation": platform.python_implementation(),
         "platform": platform.platform(),
         "packages": package_versions,
+        "scipy_blas": scipy_blas(),
     }
+
+
+def scipy_blas() -> dict[str, str]:
+    """Record the numerical backend that affects seeded paper computations."""
+    from scipy.__config__ import CONFIG
+    backend = CONFIG.get("Build Dependencies", {}).get("blas", {})
+    return {key: str(backend.get(key, "unknown")) for key in ("name", "version")}
 
 
 def find_repo_root(start: str | Path | None = None) -> Path | None:
@@ -67,3 +78,40 @@ def repo_relative_path(path: str | Path, *, repo_root: str | Path | None = None)
         except ValueError:
             pass
     return str(path)
+
+
+def publication_style() -> None:
+    """Set the common figure typography without requiring system fonts."""
+    import matplotlib.pyplot as plt
+    plt.rcParams.update({
+        "text.usetex": False, "font.family": "serif",
+        "font.serif": ["Palatino", "TeX Gyre Pagella", "DejaVu Serif"],
+        "mathtext.fontset": "cm", "font.size": 8, "axes.labelsize": 9,
+        "axes.titlesize": 9, "xtick.labelsize": 8, "ytick.labelsize": 8,
+        "legend.fontsize": 7.5, "axes.spines.top": True,
+        "axes.spines.right": True, "axes.linewidth": 1.,
+        "xtick.major.width": .9, "ytick.major.width": .9,
+        "xtick.major.size": 3.5, "ytick.major.size": 3.5,
+        "savefig.bbox": "tight", "savefig.pad_inches": .02,
+    })
+
+
+def equal_legend_rows(legend, spacing_points: float = 15.1020833333333) -> None:
+    """Keep method names and markers aligned when saving at another DPI."""
+    from matplotlib.mathtext import MathTextParser
+    from matplotlib.transforms import ScaledTranslation, blended_transform_factory
+
+    figure = legend.get_figure()
+    title = legend.get_title()
+    title.set_transform(title.get_transform() + ScaledTranslation(
+        0, .1140625 / 72, figure.dpi_scale_trans))
+    parser = MathTextParser("path")
+    for index, (text, handle) in enumerate(zip(legend.get_texts(), legend.legend_handles)):
+        offset = (parser.parse(text.get_text(), dpi=72, prop=text.get_fontproperties()).glyphs[0][4]
+                  if "$" in text.get_text() else 0)
+        baseline = -13 - index * spacing_points
+        text.set_transform(blended_transform_factory(text.get_transform(), title.get_transform())
+                           + ScaledTranslation(0, (baseline-offset)/72, figure.dpi_scale_trans))
+        handle.set_ydata([0.0] * len(handle.get_ydata()))
+        handle.set_transform(blended_transform_factory(handle.get_transform(), title.get_transform())
+                             + ScaledTranslation(0, (baseline+2.8)/72, figure.dpi_scale_trans))

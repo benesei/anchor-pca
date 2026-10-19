@@ -1,0 +1,12 @@
+period_id,role,start_year,end_year,n_observations,raw_rows,incomplete_rows_removed
+source_1,source,1970,1974,1262,1263,1
+source_2,source,1975,1979,1263,1263,0
+source_3,source,1980,1984,1265,1265,0
+source_4,source,1985,1989,1263,1263,0
+source_5,source,1990,1994,1265,1265,0
+target_1,target,1995,1999,1263,1263,0
+target_2,target,2000,2004,1256,1256,0
+target_3,target,2005,2009,1259,1259,0
+target_4,target,2010,2014,1258,1258,0
+target_5,target,2015,2019,1258,1258,0
+target_6,target,2020,2024,1258,1258,0
