@@ -1,10 +1,40 @@
-# Anchor PCA
+<h1 align="center">Anchor PCA</h1>
 
-Code for **Anchor PCA** (NeurIPS 2026), by Benedikt Seiter, Anya Fries,
-Julius von Kügelgen, and Jonas Peters. [Paper](https://arxiv.org/abs/2606.06233).
+<p align="center">
+  <a href="https://benesei.github.io/">Benedikt Seiter</a>, Anya Fries,
+  <a href="https://www.juliusvonkugelgen.com/">Julius von Kügelgen</a>, and
+  <a href="https://people.math.ethz.ch/~jopeters/">Jonas Peters</a>
+</p>
+
+<p align="center">ETH Zürich</p>
+
+<p align="center">
+  <a href="https://neurips.cc/virtual/2026/loc/paris/poster/153959"><img src="https://img.shields.io/badge/NeurIPS-2026-68408A" alt="NeurIPS 2026"></a>
+  <a href="https://arxiv.org/abs/2606.06233"><img src="https://img.shields.io/badge/arXiv-2606.06233-b31b1b" alt="arXiv:2606.06233"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT license"></a>
+</p>
+
+<p align="center">
+  <a href="#video">Video</a> ·
+  <a href="#installation">Installation</a> ·
+  <a href="#usage">Usage</a> ·
+  <a href="#reproduce-the-paper">Reproduction</a> ·
+  <a href="ASSETS.md">Data</a> ·
+  <a href="#citation">Citation</a>
+</p>
 
 Anchor PCA learns a low-dimensional representation from several source domains.
 It trades explained variance against agreement of their principal subspaces.
+
+<a name="video"></a>
+<details>
+<summary>Watch a short visual introduction (86 seconds)</summary>
+
+A visual introduction to Anchor PCA using a simple illustrative example.
+
+https://github.com/user-attachments/assets/53257604-9c41-495d-94a8-ddcf5bb5dc1e
+
+</details>
 
 ## Installation
 
