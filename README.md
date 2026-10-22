@@ -1,7 +1,7 @@
 <h1 align="center">Anchor PCA</h1>
 
 <p align="center">
-  <a href="https://benesei.github.io/">Benedikt Seiter</a>, Anya Fries,
+  <a href="https://benesei.github.io/">Benedikt Seiter</a>, <a href="https://anyafries.github.io/">Anya Fries</a>,
   <a href="https://www.juliusvonkugelgen.com/">Julius von Kügelgen</a>, and
   <a href="https://people.math.ethz.ch/~jopeters/">Jonas Peters</a>
 </p>
